@@ -6,7 +6,7 @@ import {useEffect,useRef,useState} from 'react';
 import type {CSSProperties} from 'react';
 import {Home,RotateCw,Pointer} from 'lucide-react';
 import {OutputIcon,profileIcons as icons} from './MenuIcons';
-type PickerState={condensed?:boolean;pointer?:{x:number;y:number};compact?:boolean;radialItems?:RadialAction['items'];profiles:{id:string;name:string;icon?:string}[];selected:number;angle:number};
+type PickerState={condensed?:boolean;pointer?:{x:number;y:number};compact?:boolean;radialItems?:RadialAction['items'];profiles:{id:string;name:string;icon?:string;angle?:number}[];selected:number;angle:number};
 export function ProfilePicker(){
  const [phase,setPhase]=useState('entering');
  const [entrance,setEntrance]=useState(0);
@@ -77,7 +77,7 @@ export function ProfilePicker(){
     {!state.compact&&<div className="picker-center"><p className="picker-selection" aria-live="polite" aria-atomic="true">{state.profiles[state.selected]?.name??'No profiles'}</p><div className="picker-help" id="picker-help"><span><RotateCw size={22} strokeWidth={1.5} aria-hidden="true"/><span>Choose</span></span><span><span className="picker-double-tap" aria-hidden="true"><Pointer size={22} strokeWidth={1.5}/><i>2</i></span><span>Select</span></span></div></div>}
     {!!count&&<div className="picker-cursor-arm" style={{transform:`rotate(${position}rad)`}} aria-hidden="true"><span className="picker-cursor"/></div>}
     {state.profiles.map((p,i)=>{
-     const angle=i/count*Math.PI*2;
+     const angle=p.angle??i/count*Math.PI*2;
      const centered=i===state.selected;
      const Icon=icons[p.icon as keyof typeof icons]??Home;
      return <button key={p.id} className={`picker-tile ${centered?'selected':''}`} style={{'--x':`${Math.sin(angle)*37}%`,'--y':`${-Math.cos(angle)*37}%`,'--tile-size':`${Math.min(76,Math.max(40,760/Math.max(count,1)))}px`} as CSSProperties} aria-label={`Select ${p.name}`} aria-pressed={centered} onClick={()=>window.band?.send({action:'picker_select',profileId:p.id})}>

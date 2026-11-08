@@ -76,11 +76,12 @@ function airCursorMessage(message:any){
  if(message.kind==='state'&&message.state!=='connected')hideAirCursor();
 }
 let floatingComboViewer = false;
+let notchMenuNames=true;
 let notchComboViewerSides:'both'|'left'|'right'='both';
 const validNotchSides=(value:unknown):value is typeof notchComboViewerSides=>value==='both'||value==='left'||value==='right';
 let notchGeometry={displayId:0,width:200,height:32,offset:0};
 function comboViewerGeometry(){comboViewer?.webContents.send('band:message',{kind:'combo_viewer_geometry',width:notchGeometry.width,height:notchGeometry.height,offset:notchGeometry.offset});}
-function comboViewerState(){comboViewer?.webContents.send('band:message',{kind:'combo_viewer_config',assignments:configuredAssignments,sides:notchComboViewerSides});comboViewerGeometry();if(pickerOpen)comboViewer?.webContents.send('band:message',{kind:'radial_name',name:radialItems?.[pickerSelected]?.name?.trim()??''});}
+function comboViewerState(){comboViewer?.webContents.send('band:message',{kind:'combo_viewer_config',assignments:configuredAssignments,sides:notchComboViewerSides});comboViewerGeometry();sendPickerName();}
 function positionComboViewer(){
  cheatSheetState();
  if(!comboViewer||comboViewer.isDestroyed())return;
@@ -162,7 +163,7 @@ function syncComboViewer(){
  if(process.argv.includes('--dev')||!fs.existsSync(path.join(root,'dist/index.html')))void comboViewer.loadURL('http://127.0.0.1:5190/?combo-viewer');
  else void comboViewer.loadFile(path.join(root,'dist/index.html'),{query:{'combo-viewer':'1'}});
 }
-let pickerProfiles: {id:string;name:string;icon?:string}[] = [];
+let pickerProfiles: {id:string;name:string;icon?:string;angle?:number}[] = [];
 let pickerActive = '';
 let radialItems: {id:string;name?:string;angle?:number;output:any}[] | undefined;
 let radialOpener: string | undefined;
@@ -189,7 +190,12 @@ let pickerHideTimer: ReturnType<typeof setTimeout> | undefined;
 let pickerTimer: ReturnType<typeof setTimeout> | undefined;
 let pickerFollowTimer: ReturnType<typeof setInterval> | undefined;
 const workerCommand = (command:unknown) => worker?.stdin.write(JSON.stringify(command)+'\n');
-function pickerState(){comboViewer?.webContents.send('band:message',{kind:'radial_name',name:pickerOpen?radialItems?.[pickerSelected]?.name?.trim()??'':''});picker?.webContents.send('band:message',{kind:'picker_state',state:{compact:compactRadialMenus,condensed:pickerCondensed,pointer:pickerPointer,profiles:pickerProfiles,radialItems,selected:pickerSelected,angle:pickerAngle}});}
+function positionedProfiles(){
+ const action=configuredAssignments.find(a=>a.id===pickerOpener)?.appAction;
+ return spaceRadialItems(pickerProfiles.map(p=>({...p,angle:action?.type==='open-profile-picker'&&Number.isFinite(action.positions?.[p.id])?action.positions![p.id]:undefined})));
+}
+function sendPickerName(){comboViewer?.webContents.send('band:message',{kind:'radial_name',name:pickerOpen&&notchMenuNames?(radialItems?radialItems[pickerSelected]?.name?.trim():pickerProfiles[pickerSelected]?.name)??'':''});}
+function pickerState(){sendPickerName();picker?.webContents.send('band:message',{kind:'picker_state',state:{compact:compactRadialMenus,condensed:pickerCondensed,pointer:pickerPointer,profiles:positionedProfiles(),radialItems,selected:pickerSelected,angle:pickerAngle}});}
 function closePicker(select=false){
  if(!pickerOpen)return;
  if(select&&radialItems&&keepRadialMenuOpen){const chosen=radialItems[pickerSelected];if(chosen)workerCommand({action:'radial_execute',output:chosen.output});return;}
@@ -210,7 +216,7 @@ function openPicker(items?:{id:string;name?:string;angle?:number;output:any}[],o
  radialItems=items?spaceRadialItems(items):undefined;radialOpener=opener;
  if(!pickerEntries().length){workerCommand({action:'profile_picker',open:false});return;}
  clearTimeout(pickerHideTimer);pickerOpen=true;pickerSelected=radialItems?0:Math.max(0,pickerProfiles.findIndex(p=>p.id===pickerActive));
- pickerAngle=radialItems?.[pickerSelected]?.angle??pickerSelected/pickerEntries().length*Math.PI*2;pickerOrigin=lastOrientation;pickerLastDelta=0;pickerRotation=0;pickerSlot=pickerSelected;
+ pickerAngle=(radialItems??positionedProfiles())[pickerSelected]?.angle??pickerSelected/pickerEntries().length*Math.PI*2;pickerOrigin=lastOrientation;pickerLastDelta=0;pickerRotation=0;pickerSlot=pickerSelected;
  workerCommand({action:'profile_picker',open:true});
  if(!picker){
   pickerReady=false;
@@ -282,7 +288,7 @@ function pickerMessage(message:any){
   const [w,x,y,z]=pickerOrigin,[a,b,c,d]=lastOrientation!;
   const scalar=w*a+x*b+y*c+z*d,axis=w*c+x*d-y*a-z*b;
   let delta=2*Math.atan2(axis,scalar);delta=Math.atan2(Math.sin(delta),Math.cos(delta));
-  const base=radialItems?(radialItems[0]?.angle??0):Math.max(0,pickerProfiles.findIndex(p=>p.id===pickerActive))/pickerEntries().length*Math.PI*2;
+  const base=radialItems?(radialItems[0]?.angle??0):(positionedProfiles().find(p=>p.id===pickerActive)?.angle??Math.max(0,pickerProfiles.findIndex(p=>p.id===pickerActive))/pickerEntries().length*Math.PI*2);
   // Unwrap orientation at ±π, then use a Schmitt threshold to prevent boundary chatter.
   pickerRotation+=Math.atan2(Math.sin(delta-pickerLastDelta),Math.cos(delta-pickerLastDelta));
   pickerLastDelta=delta;
@@ -295,9 +301,10 @@ function pickerMessage(message:any){
     picker?.webContents.send('band:message',{kind:'picker_condensed',condensed:false});
    }
   }
-  if(radialItems?.some(item=>item.angle!==undefined)){
-   const distance=(index:number)=>{const angle=radialItems![index].angle??index/radialItems!.length*Math.PI*2;return Math.abs(Math.atan2(Math.sin(pickerAngle-angle),Math.cos(pickerAngle-angle)));};
-   const nearest=radialItems.reduce((best,_,index)=>distance(index)<distance(best)?index:best,0);
+  const positioned=radialItems??positionedProfiles();
+  if(positioned.some(item=>item.angle!==undefined)){
+   const distance=(index:number)=>{const angle=positioned[index].angle??index/positioned.length*Math.PI*2;return Math.abs(Math.atan2(Math.sin(pickerAngle-angle),Math.cos(pickerAngle-angle)));};
+   const nearest=positioned.reduce((best,_,index)=>distance(index)<distance(best)?index:best,0);
    if(distance(pickerSelected)-distance(nearest)>.04)pickerSelected=nearest;
   }else pickerSelected=((pickerSlot%pickerEntries().length)+pickerEntries().length)%pickerEntries().length;
   pickerState();
@@ -319,7 +326,7 @@ let radialMenuFollowsMouse=false;
 const preferencesPath = () => path.join(app.getPath('userData'), 'app-settings.json');
 function settings() {
   const login = process.platform === 'darwin' ? app.getLoginItemSettings() : undefined;
-  return {runInBackground, compactRadialMenus, keepRadialMenuOpen, radialMenuFollowsMouse, floatingComboViewer, airCursorOverlay, notchComboViewerSides, openAtLogin: login?.openAtLogin ?? false, loginAvailable: process.platform === 'darwin' && app.isPackaged, loginStatus: login?.status};
+  return {runInBackground, compactRadialMenus, keepRadialMenuOpen, radialMenuFollowsMouse, floatingComboViewer, airCursorOverlay, notchComboViewerSides, notchMenuNames, openAtLogin: login?.openAtLogin ?? false, loginAvailable: process.platform === 'darwin' && app.isPackaged, loginStatus: login?.status};
 }
 function showWindow() {
   app.dock?.show();
@@ -359,20 +366,21 @@ ipcMain.handle('app:settings', (event, update) => {
       const login = app.getLoginItemSettings();
       if (update.openAtLogin && !login.openAtLogin && login.status !== 'requires-approval') throw new Error('macOS could not enable launch at login. Check System Settings → General → Login Items.');
     }
-    if (typeof update.airCursorOverlay === 'boolean' || typeof update.runInBackground === 'boolean' || typeof update.compactRadialMenus === 'boolean' || typeof update.floatingComboViewer === 'boolean' || typeof update.keepRadialMenuOpen === 'boolean' || typeof update.radialMenuFollowsMouse === 'boolean' || validNotchSides(update.notchComboViewerSides)) {
+    if (typeof update.notchMenuNames === 'boolean' || typeof update.airCursorOverlay === 'boolean' || typeof update.runInBackground === 'boolean' || typeof update.compactRadialMenus === 'boolean' || typeof update.floatingComboViewer === 'boolean' || typeof update.keepRadialMenuOpen === 'boolean' || typeof update.radialMenuFollowsMouse === 'boolean' || validNotchSides(update.notchComboViewerSides)) {
       const nextBackground=typeof update.runInBackground==='boolean'?update.runInBackground:runInBackground;
       const nextCompact=typeof update.compactRadialMenus==='boolean'?update.compactRadialMenus:compactRadialMenus;
       const nextFollow=typeof update.radialMenuFollowsMouse==='boolean'?update.radialMenuFollowsMouse:radialMenuFollowsMouse;
       const nextKeep=typeof update.keepRadialMenuOpen==='boolean'?update.keepRadialMenuOpen:keepRadialMenuOpen;
       const nextAir=typeof update.airCursorOverlay==='boolean'?update.airCursorOverlay:airCursorOverlay;
       const nextFloating=typeof update.floatingComboViewer==='boolean'?update.floatingComboViewer:floatingComboViewer;
+      const nextNames=typeof update.notchMenuNames==='boolean'?update.notchMenuNames:notchMenuNames;
       const nextSides=validNotchSides(update.notchComboViewerSides)?update.notchComboViewerSides:notchComboViewerSides;
       const sidesChanged=nextSides!==notchComboViewerSides;
       fs.mkdirSync(app.getPath('userData'), {recursive:true});
-      fs.writeFileSync(preferencesPath(), JSON.stringify({runInBackground:nextBackground,compactRadialMenus:nextCompact,keepRadialMenuOpen:nextKeep,radialMenuFollowsMouse:nextFollow,floatingComboViewer:nextFloating,airCursorOverlay:nextAir,notchComboViewerSides:nextSides}));
+      fs.writeFileSync(preferencesPath(), JSON.stringify({runInBackground:nextBackground,compactRadialMenus:nextCompact,keepRadialMenuOpen:nextKeep,radialMenuFollowsMouse:nextFollow,floatingComboViewer:nextFloating,airCursorOverlay:nextAir,notchComboViewerSides:nextSides,notchMenuNames:nextNames}));
       if(compactRadialMenus!==nextCompact||keepRadialMenuOpen!==nextKeep||radialMenuFollowsMouse!==nextFollow)closePicker();
       keepRadialMenuOpen=nextKeep;radialMenuFollowsMouse=nextFollow;
-      compactRadialMenus=nextCompact;floatingComboViewer=nextFloating;notchComboViewerSides=nextSides;syncComboViewer();
+      compactRadialMenus=nextCompact;floatingComboViewer=nextFloating;notchComboViewerSides=nextSides;notchMenuNames=nextNames;syncComboViewer();sendPickerName();
       if(airCursorOverlay!==nextAir){airCursorOverlay=nextAir;syncAirCursor();}
       if(sidesChanged)comboViewer?.webContents.send('band:message',{kind:'combo_viewer_preferences',sides:notchComboViewerSides});
     }
@@ -395,6 +403,33 @@ function credentialsCommand(request:object):Promise<any> {
     child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(request)+'\n');
   });
 }
+// Keep identity images out of the bridge event stream, logs, and persistent storage.
+ipcMain.handle('band:identity-qr', async (event, deviceId) => {
+  if (quitting || !isLiveWindow(window) || event.sender !== window.webContents) throw new Error('Unknown settings sender');
+  if (process.platform !== 'darwin' || typeof deviceId !== 'string' || !/^[A-Za-z0-9:-]{1,128}$/.test(deviceId)) throw new Error('Invalid band identifier');
+  const encoded = await new Promise<string>((resolve, reject) => {
+    execFile(path.join(root, 'dist-electron/identity-qr'), [deviceId], {timeout:30000,maxBuffer:1024*1024,env:{...process.env,NEURAL_IDENTITY_MAP:path.join(app.getPath('userData'),'band-identities.json')}}, (error, stdout, stderr) => {
+      if (error || !stdout || !/^[A-Za-z0-9+/=]+$/.test(stdout)) {
+        // Classify only known helper failures; never forward arbitrary helper output or key material.
+        const status = stderr.match(/Keychain status (-?\d+)/)?.[1];
+        let message = 'Could not export the band identity. Try again.';
+        if (status === '-128' || status === '-25293' || status === '-25308')
+          message = 'Keychain access was canceled or denied. Click Retry and allow access using your Mac login password.';
+        else if (status === '-25300')
+          message = 'No saved identity was found for this band. Connect to the band on this Mac first, then retry.';
+        else if (status)
+          message = `Could not read the saved identity (Keychain status ${status}). Unlock the login keychain in Keychain Access, then retry.`;
+        else if (stderr.includes('A verified Mac identity with a band public key is required.'))
+          message = 'The saved identity is incomplete or unverified. Connect to the band on this Mac to verify it, disconnect, then retry.';
+        else if (error?.killed)
+          message = 'Keychain access timed out. Click Retry and respond to the macOS permission prompt.';
+        reject(new Error(message));
+      }
+      else resolve(stdout);
+    });
+  });
+  return `data:image/png;base64,${encoded}`;
+});
 ipcMain.handle('meta:credentials',async(event,request)=>{
   if(quitting || !isLiveWindow(window) || event.sender!==window.webContents)throw new Error('Unknown settings sender');
   if(!['status','save','forget'].includes(request?.action))throw new Error('Invalid credential action');
@@ -423,7 +458,7 @@ function startWorker() {
   const localPython = path.join(root, '.venv/bin/python');
   const bundledPython = path.join(process.resourcesPath, 'runtime/bin/python3.12');
   const executable = app.isPackaged ? bundledPython : (process.env.BAND_PYTHON || (fs.existsSync(localPython) ? localPython : 'python3'));
-  worker = spawn(executable, ['-u', path.join(root, 'python/bridge.py')], { cwd: app.isPackaged ? app.getPath('userData') : root, env: {...process.env, PYTHONHOME: app.isPackaged ? path.join(process.resourcesPath, 'runtime') : process.env.PYTHONHOME, PYTHONNOUSERSITE:'1', PYTHONDONTWRITEBYTECODE:'1', NEURAL_MODEL_HOME:path.join(app.getPath('userData'),'model-lab')} });
+  worker = spawn(executable, ['-u', path.join(root, 'python/bridge.py')], { cwd: app.isPackaged ? app.getPath('userData') : root, env: {...process.env, PYTHONHOME: app.isPackaged ? path.join(process.resourcesPath, 'runtime') : process.env.PYTHONHOME, PYTHONNOUSERSITE:'1', PYTHONDONTWRITEBYTECODE:'1', NEURAL_MODEL_HOME:path.join(app.getPath('userData'),'model-lab'), NEURAL_IDENTITY_MAP:path.join(app.getPath('userData'),'band-identities.json')} });
   workerCommand({action:'air_preview',enabled:airCursorOverlay});
   createInterface({input:worker.stdout}).on('line', line => { try { const message=JSON.parse(line);if(message.kind==='meta_login')void handleMetaLogin(message);else if(message.kind==='meta_login_cancel'){if(loginRequest===message.request_id){loginRequest=undefined;activeLogin?.cancel();}}else publish(message); } catch { publish({kind:'error',message:'Invalid bridge response'}); } });
   worker.stderr.on('data', data => publish({kind:'log',message:data.toString().slice(0,2000)}));
@@ -481,13 +516,13 @@ ipcMain.on('band:command', (event, command) => {
     if(process.platform === 'darwin') { systemPreferences.isTrustedAccessibilityClient(true); shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'); }
     return;
   }
-  if(!['configure_shortcuts','suspend_shortcuts','discover','connect','disconnect','enroll','shutdown','native_handwriting_status','native_handwriting_start','native_handwriting_stop','native_handwriting_clear','model_status','model_leave','model_install','model_cancel','model_capture_start','model_capture_stop','model_run'].includes(command.action)) return;
+  if(!['configure_shortcuts','suspend_shortcuts','discover','identities','connect','disconnect','enroll','shutdown','native_handwriting_status','native_handwriting_start','native_handwriting_stop','native_handwriting_clear','model_status','model_leave','model_install','model_cancel','model_capture_start','model_capture_stop','model_run'].includes(command.action)) return;
   startWorker(); worker?.stdin.write(JSON.stringify(command)+'\n');
 });
 if (!app.requestSingleInstanceLock()) app.quit();
 else app.on('second-instance', () => { if (window) showWindow(); });
 app.whenReady().then(() => {
-  try { const saved=JSON.parse(fs.readFileSync(preferencesPath(), 'utf8')); runInBackground=saved.runInBackground===true; compactRadialMenus=saved.compactRadialMenus===true;keepRadialMenuOpen=saved.keepRadialMenuOpen===true;radialMenuFollowsMouse=saved.radialMenuFollowsMouse===true;floatingComboViewer=saved.floatingComboViewer===true;airCursorOverlay=saved.airCursorOverlay===true;notchComboViewerSides=validNotchSides(saved.notchComboViewerSides)?saved.notchComboViewerSides:'both'; } catch { /* First launch uses defaults. */ }
+  try { const saved=JSON.parse(fs.readFileSync(preferencesPath(), 'utf8')); runInBackground=saved.runInBackground===true; compactRadialMenus=saved.compactRadialMenus===true;keepRadialMenuOpen=saved.keepRadialMenuOpen===true;radialMenuFollowsMouse=saved.radialMenuFollowsMouse===true;floatingComboViewer=saved.floatingComboViewer===true;airCursorOverlay=saved.airCursorOverlay===true;notchMenuNames=saved.notchMenuNames!==false;notchComboViewerSides=validNotchSides(saved.notchComboViewerSides)?saved.notchComboViewerSides:'both'; } catch { /* First launch uses defaults. */ }
   const backgroundLaunch = process.platform === 'darwin' && app.getLoginItemSettings().wasOpenedAtLogin;
   if (runInBackground || backgroundLaunch) ensureTray();
   window = new BrowserWindow({show:!backgroundLaunch,width:1450,height:950,minWidth:860,minHeight:680,title:'Neural — Motions',backgroundColor:'#ffffff',titleBarStyle:'hiddenInset',webPreferences:{preload:path.join(root,'dist-electron/preload.cjs'),backgroundThrottling:false,contextIsolation:true,nodeIntegration:false,sandbox:true}});

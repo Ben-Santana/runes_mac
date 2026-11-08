@@ -93,25 +93,17 @@ Tap and rotate means an index tap followed within 650ms by a wrist orientation c
 
 Verification: `npm run build`, `npm run test:python`, `npm run test:ui`, and `node scripts/motions-smoke.mjs`.
 
-On desktop startup, Neural scans for nearby bands once. A single discovered band connects automatically using its saved identity; multiple bands open the connection picker. No bands leaves the app disconnected. Explicit manual connection, disconnect, or demo actions cancel pending startup auto-connection.
+While automatic connection is enabled, Neural scans for nearby bands. A single discovered band connects automatically using its saved identity; multiple bands open the connection picker. No bands leaves the app disconnected. Explicit manual connection, disconnect, or demo actions cancel pending startup auto-connection.
 
-### Meta sign-in recovery
+### Connection recovery and shared ownership
 
-A rejected saved identity, missing enrollment, or startup timeout specifically in the
-trust stage automatically opens Meta sign-in once per connection attempt. Successful
-enrollment reconnects immediately; a second failure stays visible instead of looping.
-Other Bluetooth and protocol failures do not automatically change enrollment.
+Connect never invokes enrollment. Missing credentials, rejected identity, trust timeout, permission failures, and protocol failures pause for explicit recovery. Transport failures retry at 1, 2, and 4 seconds, then pause. Canceling Meta sign-in also pauses the UI's automatic discovery/connect loop, persistently across launches.
 
-Use **Device settings → Sign in with Meta again**, or the same action under the
-connection dialog's **More options**, to enroll again manually. The dialog provides
-**Cancel Meta sign-in** while enrollment runs. Re-enrollment can invalidate another
-app's saved band identity. Recovery preserves the existing missing-band-key policy.
+Manage connection lists saved and eligible pending identities by public host fingerprint. Existing Keychain accounts are stable credential records; Bluetooth UUIDs are transport aliases. A user-selected new address is associated only after authentication. Compatibility authenticates the host without proving the band's identity, so address association remains a user-confirmed physical selection. Saved identities are the default; pending candidates never silently replace them.
 
-After 30 seconds of sensor traffic with no gestures in a new session, Neural suggests
-checking band fit, trying index or middle taps, and reconnecting. Silence alone never
-suggests or starts enrollment; receiving a gesture removes the notice. Manual Meta
-sign-in remains available in Device settings. Test the recovery interface with `node scripts/recovery-smoke.mjs` while the
-local preview server is running.
+Explicit ownership enrollment is separately confirmed and can invalidate the shared identity on another device. A known band public key is preserved when passed into that ceremony. Missing-key compatibility remains an expected supported mode.
+
+Disconnect pauses automatic connection and waits for worker cleanup before reporting local closure. The target device must still prove that its Bluetooth connection, host authentication, and subscription work. This is a manual handoff, not a cross-device ownership protocol.
 
 ### Optional saved Meta password
 

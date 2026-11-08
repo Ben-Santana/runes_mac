@@ -24,7 +24,7 @@ Neural is an early release. Band firmware compatibility and gesture recognition 
 3. For first-time setup, expand **First time with this band?** and follow Meta sign-in to enroll it. Enrollment changes the band's saved identity and can invalidate another app's access.
 4. Try an index or middle-finger tap to confirm gestures are arriving.
 
-On startup, Neural scans once and connects automatically when it finds a single band with a saved identity. If it finds several bands, choose one from the picker.
+When automatic connection is enabled, Neural discovers nearby bands and uses the remembered identity binding. Identity, authentication, or exhausted transport failures pause automatic connection, including across relaunches. Connect and Scan again explicitly resume it; neither starts enrollment.
 
 You can also choose **Explore demo** to look around without a band. Demo mode previews simulated data and doesn't send keyboard or mouse actions.
 
@@ -47,7 +47,7 @@ Open **Device settings → Open device test** to view live EMG signals, wrist or
 - **No band found:** check pairing mode, Bluetooth permission, and whether another app is connected.
 - **Connected but no gestures:** check band fit, try index or middle taps, then reconnect. Sensor traffic alone doesn't mean gesture recognition is working.
 - **Shortcuts don't run:** check Accessibility permission, that the assignment is enabled, and that you're outside the editor and device test views.
-- **Saved identity rejected:** use **Device settings → Sign in with Meta again**. Re-enrollment can affect other apps using the same band.
+- **Saved identity missing or rejected:** open Manage connection and compare the public fingerprint. Choose the existing saved identity for the same physical band, especially after a Bluetooth ID changes. Repair OS pairing separately if needed. Re-enrollment is an explicit ownership replacement, never an automatic repair.
 
 [Report a problem](https://github.com/Ben-Santana/neural/issues) with your macOS version, Mac model, app release, and steps to reproduce it. Don't include passwords, tokens, or private sensor captures.
 
@@ -91,3 +91,21 @@ Every push to `main` runs the [macOS release workflow](.github/workflows/release
 Each release has a unique tag such as `v0.1.0-build.12` and keeps its own download. The most recently published release is available through the Download link above. The same files are also retained as workflow artifacts for 30 days. Use the workflow's **Run workflow** button on `main` to rebuild manually. Re-running a completed run replaces that run's release assets.
 
 These are automatically published early builds, not Apple-notarized releases. No signing secrets are required for the current ad-hoc builds. Installing a newer version is manual: download its DMG, quit Neural, and replace the app in Applications.
+
+## Connect iPhone with the Mac identity
+
+In **Device settings → Connection**, select **Show iPhone QR code**. Allow macOS Keychain access if prompted. In the iPhone app, select the same band and choose **Import Mac identity**. The QR supports verified identities and explicitly permitted missing-band-key compatibility identities; it never enrolls or changes ownership. Compatibility preserves channel encryption and host authentication while leaving band identity unverified.
+
+The QR contains the private authentication key. Keep it out of photos and screen sharing. It is generated locally in memory and hidden after 60 seconds, when the window loses focus after the QR loads, or when the settings view closes. A copied code remains usable. Disconnect the Mac before connecting the iPhone; sharing an identity does not enable simultaneous connections.
+
+The native QR helper is compiled by `npm run build` and `npm run desktop` and included in packaged apps. Installed users do not need Swift or Xcode.
+
+## Shared identity and manual handoff
+
+Connect never opens Meta sign-in. Explicit setup requires confirming ownership replacement. Closing or canceling sign-in pauses connection attempts; no automatic enrollment fallback exists. Transient transport failures receive at most three retries (1, 2, 4 seconds), then pause for user recovery. Identity, trust, and permission failures pause immediately.
+
+If the band appears with a different Bluetooth UUID, select it and choose its existing **Ownership identity** in Manage connection. Compare the public host fingerprint with iPhone. The new address is bound only after authentication; original Keychain accounts and other identities remain intact. Saved is the default; eligible pending enrollment is an explicit option. Compatibility cannot prove that a rediscovered peripheral is the same band, so this association requires your physical selection.
+
+For switching, choose Disconnect and wait for **Local connection closed**. Automatic connection stays paused across relaunches. Then connect iPhone with the same identity. This confirms local cleanup, not remote availability or band bond capacity. Do not repeatedly enroll or enter pairing mode to hand off.
+
+Run the isolated regression checks with `npm run test:python` and, with the local preview running, `node scripts/connection-stability-smoke.mjs` and `node scripts/startup-smoke.mjs`. The UI checks mock the bridge. They do not establish hardware switching reliability.

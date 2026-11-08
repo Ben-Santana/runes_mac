@@ -66,6 +66,20 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         await worker.disconnect()
 
 
+class ReleaseFailureTests(unittest.IsolatedAsyncioTestCase):
+    async def test_native_cleanup_failure_still_cancels_session_without_claiming_handoff(self):
+        worker=bridge.Bridge(); cleaned=asyncio.Event()
+        async def running():
+            try: await asyncio.Future()
+            finally: cleaned.set()
+        worker.session=asyncio.create_task(running()); await asyncio.sleep(0)
+        with patch.object(worker.native,'stop',new=AsyncMock(side_effect=RuntimeError('failed'))), patch.object(bridge,'emit') as emit:
+            await worker.command({'action':'disconnect'})
+        self.assertTrue(cleaned.is_set()); self.assertIsNone(worker.session)
+        self.assertTrue(any(c.args==('handoff_unconfirmed',) for c in emit.call_args_list))
+        self.assertFalse(any(c.args==('handoff_ready',) for c in emit.call_args_list))
+
+
 class ActivationTests(unittest.IsolatedAsyncioTestCase):
     async def run_stream(self, failure=None, quiet=False):
         calls = []
@@ -79,7 +93,7 @@ class ActivationTests(unittest.IsolatedAsyncioTestCase):
         class FakeBand:
             device_info = None
             band_verified = True
-            def __init__(self, *_): pass
+            def __init__(self, *_, **kwargs): pass
             async def __aenter__(self): return self
             async def __aexit__(self, *_): calls.append('closed')
             async def read_hand(self): return None
@@ -91,6 +105,7 @@ class ActivationTests(unittest.IsolatedAsyncioTestCase):
                 return b''
             def subscribe(self, streams): return Subscription()
         worker = bridge.Bridge()
+        worker.retry_delays = ()
         with patch('meta_neural_py.Band', FakeBand), patch.object(bridge, 'emit') as emit:
             await worker.stream('band', quiet=quiet)
         self.assertIsNone(worker.band)
@@ -107,7 +122,7 @@ class ActivationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls[-1], 'closed')
         self.assertNotIn('subscribe', calls)
         self.assertFalse(any(c.args == ('identity_recovery',) for c in emit.call_args_list))
-        self.assertTrue(any(c.args == ('error',) and 'activation expired' in c.kwargs['message'] for c in emit.call_args_list))
+        self.assertTrue(any(c.args == ('connection_recovery',) and 'activation expired' in c.kwargs['detail'] for c in emit.call_args_list))
         emit.assert_any_call('state', state='disconnected')
 
     async def test_quiet_connection_failure_stays_quiet_for_another_try(self):
@@ -133,6 +148,13 @@ class DiscoveryTests(unittest.IsolatedAsyncioTestCase):
             await worker.command({'action':'discover','request_id':'watch:4','timeout':3,'quiet':True})
         discover.assert_awaited_once_with(timeout=3)
         emit.assert_called_once_with('devices', devices=[], request_id='watch:4')
+
+    async def test_quiet_discovery_permission_failure_pauses_recovery(self):
+        from meta_neural_py.errors import PermissionDenied
+        worker=bridge.Bridge()
+        with patch('meta_neural_py.Band.discover',new=AsyncMock(side_effect=PermissionDenied('denied'))), patch.object(bridge,'emit') as emit:
+            await worker.command({'action':'discover','request_id':'watch:1','quiet':True})
+        self.assertTrue(any(c.args==('connection_recovery',) and c.kwargs['category']=='permission' for c in emit.call_args_list))
 
     async def test_discovery_does_not_scan_while_a_band_is_connected(self):
         worker = bridge.Bridge()
@@ -170,34 +192,68 @@ class ShortcutFeedbackTests(unittest.TestCase):
 
 
 class EnrollmentRecoveryTests(unittest.IsolatedAsyncioTestCase):
-    def test_only_identity_failures_and_trust_timeouts_recover(self):
-        from meta_neural_py.errors import IdentityMismatch, IdentityStoreError, RequestTimeout, DeviceDisconnected, TrustVerificationFailed
-        for error in (IdentityMismatch('stale'), RequestTimeout('expired', stage='trust'), IdentityStoreError('No verified identity saved; run Band.enroll explicitly.')):
-            self.assertTrue(bridge.Bridge.needs_enrollment(error))
-        for error in (RequestTimeout('expired', stage='connecting'), DeviceDisconnected('closed'), TrustVerificationFailed('proof invalid'), IdentityStoreError('Keychain denied')):
-            self.assertFalse(bridge.Bridge.needs_enrollment(error))
+    def setUp(self):
+        # Explicit enrollment tests never touch live Keychain or alias metadata.
+        patcher = patch.object(bridge, 'ConnectionIdentityStore')
+        self.identity_factory = patcher.start(); self.addCleanup(patcher.stop)
+        self.identity_factory.return_value.store.load.return_value = None
+        self.identity_factory.return_value.account = 'band'
 
-    async def test_trust_failure_releases_connection_before_one_reenrollment(self):
-        from meta_neural_py.errors import RequestTimeout
-        from types import SimpleNamespace
+    def test_recovery_separates_identity_from_transient_transport(self):
+        from meta_neural_py.errors import IdentityMismatch, IdentityStoreError, RequestTimeout, DeviceDisconnected, TrustVerificationFailed
+        for error in (IdentityMismatch('stale'), RequestTimeout('expired', stage='trust'), IdentityStoreError('Keychain denied'), TrustVerificationFailed('proof invalid')):
+            self.assertFalse(bridge.Bridge.recovery(error)[1])
+        self.assertTrue(bridge.Bridge.recovery(DeviceDisconnected('closed'))[1])
+        self.assertTrue(bridge.Bridge.recovery(RequestTimeout('expired', stage='pairing'))[1])
+
+    async def test_identity_failures_and_trust_timeouts_never_enroll_even_after_repeated_connects(self):
+        from meta_neural_py.errors import IdentityMismatch, RequestTimeout
         worker = bridge.Bridge()
-        closed = []
-        class FailedBand:
-            def __init__(self, *_): pass
-            async def __aenter__(self): return self
-            async def __aexit__(self, *_): closed.append(True)
-            device_info = None
-            band_verified = False
-            async def read_hand(self): raise RequestTimeout('expired', stage='trust')
-        async def enroll(*_, **kwargs):
-            self.assertTrue(closed)
-            self.assertTrue(kwargs['allow_missing_band_key'])
-        with patch('meta_neural_py.Band', FailedBand), patch('meta_neural_py.identity.keychain.KeychainIdentityStore.load', return_value=SimpleNamespace(allow_missing_band_key=True)), patch.object(FailedBand, 'enroll', new=AsyncMock(side_effect=enroll), create=True) as enrollment, patch.object(bridge, 'emit') as emit:
+        for error in (IdentityMismatch('missing'), IdentityMismatch('rejected'), RequestTimeout('expired', stage='trust')):
+            with patch.object(worker, '_stream_once', new=AsyncMock(side_effect=error)) as stream, patch('meta_neural_py.Band.enroll', new_callable=AsyncMock) as enrollment, patch.object(bridge, 'emit') as emit:
+                await worker.stream('band', quiet=True)
+                await worker.stream('band', quiet=True)
+                self.assertEqual(stream.await_count, 2)
+                enrollment.assert_not_awaited()
+                self.assertEqual(sum(c.args == ('connection_recovery',) for c in emit.call_args_list), 2)
+                self.assertFalse(any(c.args == ('meta_login',) for c in emit.call_args_list))
+
+    async def test_transient_retries_are_bounded_and_release_between_attempts(self):
+        from meta_neural_py.errors import DeviceDisconnected
+        worker = bridge.Bridge(); worker.retry_delays = (0, 0)
+        with patch.object(worker, '_stream_once', new=AsyncMock(side_effect=DeviceDisconnected('link lost'))) as stream, patch.object(bridge, 'emit') as emit:
             await worker.stream('band')
-        self.assertEqual(enrollment.await_count, 1)
-        self.assertEqual(len(closed), 2)
-        self.assertEqual(sum(c.args == ('identity_recovery',) for c in emit.call_args_list), 1)
-        self.assertEqual(sum(c.args == ('error',) for c in emit.call_args_list), 1)
+        self.assertEqual(stream.await_count, 3)
+        self.assertEqual(sum(c.args == ('connection_recovery',) for c in emit.call_args_list), 1)
+        self.assertEqual(sum(c.args == ('state',) and c.kwargs.get('state') == 'reconnecting' for c in emit.call_args_list), 2)
+
+    async def test_disconnect_cancels_retry_and_reports_handoff_after_cleanup(self):
+        from meta_neural_py.errors import DeviceDisconnected
+        worker = bridge.Bridge(); worker.retry_delays = (3600,)
+        with patch.object(worker, '_stream_once', new=AsyncMock(side_effect=DeviceDisconnected('lost'))) as stream, patch.object(bridge, 'emit') as emit:
+            await worker.command({'action':'connect','device_id':'band'})
+            await asyncio.sleep(0)
+            await worker.command({'action':'disconnect'})
+        self.assertEqual(stream.await_count, 1)
+        self.assertIsNone(worker.session)
+        self.assertEqual(emit.call_args_list[-1].args, ('handoff_ready',))
+
+    async def test_enrollment_defaults_to_compatibility_without_saved_identity(self):
+        worker = bridge.Bridge()
+        with patch('meta_neural_py.Band.enroll', new_callable=AsyncMock) as enrollment, patch.object(worker, 'stream', new_callable=AsyncMock), patch.object(bridge, 'emit'):
+            await worker.enroll('band')
+        enrollment.assert_awaited_once_with('band', auth=ANY, identity_store=ANY, band_public_key=None, allow_missing_band_key=True)
+
+    async def test_explicit_enrollment_preserves_a_known_band_public_key(self):
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from meta_neural_py.identity.store import Identity
+        from meta_neural_py.identity.trust import public_point
+        key=ec.generate_private_key(ec.SECP256R1())
+        self.identity_factory.return_value.store.load.return_value=Identity(key,key.public_key())
+        worker=bridge.Bridge()
+        with patch('meta_neural_py.Band.enroll',new_callable=AsyncMock) as enrollment, patch.object(worker,'stream',new_callable=AsyncMock), patch.object(bridge,'emit'):
+            await worker.enroll('band')
+        self.assertEqual(enrollment.call_args.kwargs['band_public_key'],public_point(key.public_key()))
 
     async def test_cancel_enrollment_awaits_cleanup(self):
         worker = bridge.Bridge()
@@ -218,8 +274,8 @@ class EnrollmentRecoveryTests(unittest.IsolatedAsyncioTestCase):
         worker = bridge.Bridge()
         with patch('meta_neural_py.Band.enroll', new_callable=AsyncMock) as enrollment, patch.object(worker, 'stream', new_callable=AsyncMock) as stream, patch.object(bridge, 'emit'):
             await worker.enroll('band', False)
-        enrollment.assert_awaited_once_with('band', auth=ANY, allow_missing_band_key=False)
-        stream.assert_awaited_once_with('band', recover_identity=False)
+        enrollment.assert_awaited_once_with('band', auth=ANY, identity_store=ANY, band_public_key=None, allow_missing_band_key=False)
+        stream.assert_awaited_once_with('band')
 
 
 class MetaLoginTests(unittest.IsolatedAsyncioTestCase):

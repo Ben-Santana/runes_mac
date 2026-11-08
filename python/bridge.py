@@ -37,6 +37,15 @@ else:
         from python.shortcuts import MacKeyboard, ShortcutEngine, valid_app_action
 
 
+try:
+    from .connection_identity import ConnectionIdentityStore, identity_catalog
+except ImportError:
+    try:
+        from connection_identity import ConnectionIdentityStore, identity_catalog
+    except ImportError:
+        from python.connection_identity import ConnectionIdentityStore, identity_catalog
+
+
 def normalize(value):
     if dataclasses.is_dataclass(value):
         return {f.name: normalize(getattr(value, f.name)) for f in dataclasses.fields(value)}
@@ -219,7 +228,12 @@ class Bridge:
             self.api_slots.release()
 
     async def disconnect(self):
-        await self.native.stop()
+        clean = True
+        try:
+            await self.native.stop()
+        except Exception as exc:
+            clean = False
+            emit('error', message=f'Native stream cleanup failed: {type(exc).__name__}')
         self.release_mouse_hold()
         self.shortcuts.reset()
         if self.session:
@@ -232,25 +246,39 @@ class Bridge:
             except Exception as exc:
                 # A failed cleanup must not make every later Connect re-raise
                 # the same completed session's exception.
+                clean = False
                 emit('error', message=f'Previous connection closed: {type(exc).__name__}: {exc}')
             finally:
                 self.session = None
+        return clean
+
+    retry_delays = (1, 2, 4)
 
     @staticmethod
-    def needs_enrollment(error):
-        from meta_neural_py.errors import IdentityMismatch, IdentityStoreError, RequestTimeout
-        return (isinstance(error, IdentityMismatch)
-                or isinstance(error, IdentityStoreError) and 'No verified identity saved' in str(error)
-                or isinstance(error, RequestTimeout) and error.stage == 'trust')
+    def recovery(error):
+        from meta_neural_py.errors import (IdentityMismatch, IdentityStoreError, RequestTimeout,
+                                          DeviceDisconnected, PermissionDenied, LoginCancelled)
+        if isinstance(error, LoginCancelled):
+            return 'cancelled', False, 'Meta sign-in canceled. Automatic connection is paused. Your saved identities were retained.'
+        if isinstance(error, IdentityStoreError):
+            return 'identity', False, 'The selected identity could not be read. Unlock Keychain or choose another saved identity. Enrollment has not started.'
+        if isinstance(error, IdentityMismatch):
+            return 'identity', False, 'The selected identity is missing or was rejected. Check the public fingerprint and saved identity selection. Enrollment has not started.'
+        if isinstance(error, RequestTimeout) and error.stage == 'trust':
+            return 'authentication', False, 'Host authentication timed out. Release the other client and retry the same identity. Enrollment has not started.'
+        if isinstance(error, PermissionDenied):
+            return 'permission', False, 'Allow Bluetooth access in System Settings, then reconnect.'
+        if isinstance(error, (DeviceDisconnected, OSError, RequestTimeout)):
+            return 'transport', True, 'Bluetooth or the data channel is unavailable. Release the other client, check pairing, or rediscover the band.'
+        return 'protocol', False, 'Connection setup failed. Inspect the diagnostic, then retry or choose an existing identity. Enrollment has not started.'
 
     async def enroll(self, device_id, allow_missing_band_key=None):
         from meta_neural_py import Band
         emit('state', state='enrolling')
         try:
             if allow_missing_band_key is None:
-                from meta_neural_py.identity.keychain import KeychainIdentityStore
-                identity = KeychainIdentityStore().load(device_id)
-                allow_missing_band_key = bool(identity and identity.allow_missing_band_key)
+                # Missing band keys are normal for the supported ownership service.
+                allow_missing_band_key = True
             from meta_neural_py.identity.meta_auth import MetaAuth
             bridge = self
             class LoginProvider:
@@ -264,25 +292,55 @@ class Bridge:
                     finally:
                         bridge.login_requests.pop(request_id, None)
                         emit('meta_login_cancel', request_id=request_id)
-            await Band.enroll(device_id, auth=MetaAuth(login=LoginProvider()), allow_missing_band_key=allow_missing_band_key)
+            from meta_neural_py.identity.trust import public_point
+            identity_store = ConnectionIdentityStore(device_id)
+            saved = await asyncio.to_thread(identity_store.store.load, identity_store.account)
+            known_point = public_point(saved.band_public_key) if saved is not None and saved.band_public_key is not None else None
+            await Band.enroll(device_id, auth=MetaAuth(login=LoginProvider()), identity_store=identity_store,
+                              band_public_key=known_point, allow_missing_band_key=allow_missing_band_key)
+            await asyncio.to_thread(identity_store.authenticated)
             emit('enrolled', device_id=device_id)
         except asyncio.CancelledError:
             emit('state', state='disconnected')
             raise
         except Exception as exc:
-            emit('error', message=f'{type(exc).__name__}: {exc}')
+            category, _, message = self.recovery(exc)
+            emit('connection_recovery', device_id=device_id, category=category, message=message, detail=f'{type(exc).__name__}: {exc}')
             emit('state', state='disconnected')
             return
-        await self.stream(device_id, recover_identity=False)
+        await self.stream(device_id)
 
-    async def stream(self, device_id, recover_identity=True, quiet=False):
-        recover = False
-        allow_missing = False
+    async def stream(self, device_id, quiet=False, identity_account=None, pending=False):
+        try:
+            for attempt in range(len(self.retry_delays) + 1):
+                try:
+                    await self._stream_once(device_id, identity_account=identity_account, pending=pending)
+                    return
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    category, retryable, message = self.recovery(exc)
+                    if retryable and attempt < len(self.retry_delays):
+                        delay = self.retry_delays[attempt]
+                        emit('state', state='reconnecting', attempt=attempt + 1, delay=delay)
+                        emit('connection_progress', message=f'{message} Retrying in {delay} seconds ({attempt + 1}/{len(self.retry_delays)}).')
+                        await asyncio.sleep(delay)
+                        continue
+                    emit('connection_recovery', device_id=device_id, category=category, message=message + ' Automatic connection is paused.', detail=f'{type(exc).__name__}: {exc}')
+                    return
+        finally:
+            emit('state', state='disconnected')
+
+    async def _stream_once(self, device_id, identity_account=None, pending=False):
         try:
             from meta_neural_py import Band, Streams
             from meta_neural_py.protocol.protobuf import field
             emit('state', state='connecting')
-            async with Band(device_id) as band:
+            identity_store = ConnectionIdentityStore(device_id, identity_account, pending)
+            async with Band(device_id, identity_store=identity_store) as band:
+                await asyncio.to_thread(identity_store.authenticated)
+                # The account and public fingerprint can be inspected through the catalog.
+                emit('identity_selected', account=identity_store.account, pending=pending)
                 self.band = band
                 emit('device', info=normalize(band.device_info), verified=band.band_verified,
                      hand=await band.read_hand(), battery=normalize(await band.read_battery()))
@@ -306,34 +364,19 @@ class Bridge:
                         if now-last_battery >= 30:
                             emit('battery', battery=normalize(await band.read_battery()))
                             last_battery = now
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            recover = recover_identity and self.needs_enrollment(exc)
-            if recover:
-                # Preserve the existing proof policy; recovery never weakens it.
-                try:
-                    from meta_neural_py.identity.keychain import KeychainIdentityStore
-                    identity = KeychainIdentityStore().load(device_id)
-                    allow_missing = bool(identity and identity.allow_missing_band_key)
-                except Exception:
-                    pass
-                emit('identity_recovery', device_id=device_id,
-                     message='The saved band identity could not connect. Sign in with Meta to enroll this Mac again.')
-            elif not quiet:
-                emit('error', message=f'{type(exc).__name__}: {exc}')
         finally:
             if self.pending:
                 emit('events', events=self.pending)
                 self.pending = []
             self.release_mouse_hold()
-            await self.native.stop()
-            self.native.detach()
-            self.models.invalidate('Recording discarded: band disconnected')
-            self.band = None
-            emit('state', state='disconnected')
-        if recover:
-            await self.enroll(device_id, allow_missing)
+            try:
+                await self.native.stop()
+            finally:
+                try:
+                    self.native.detach()
+                    self.models.invalidate('Recording discarded: band disconnected')
+                finally:
+                    self.band = None
 
     async def command(self, command):
         action = command.get('action')
@@ -411,17 +454,31 @@ class Bridge:
                     raise
                 except Exception as exc:
                     devices = []
-                    if not quiet:
+                    from meta_neural_py.errors import PermissionDenied, UnsupportedPlatform
+                    if isinstance(exc, (PermissionDenied, UnsupportedPlatform)):
+                        emit('connection_recovery', category='permission', message='Bluetooth discovery needs user intervention. Check Bluetooth permissions and platform support, then Scan again.', detail=f'{type(exc).__name__}: {exc}')
+                    elif not quiet:
                         emit('error', message=f'{type(exc).__name__}: {exc}')
                 emit('devices', devices=devices, request_id=request_id)
+        elif action == 'identities':
+            try:
+                emit('identities', identities=await asyncio.to_thread(identity_catalog))
+            except Exception as exc:
+                emit('identity_catalog_error', message=f'Cannot inspect saved identities: {exc}')
         elif action == 'connect':
             await self.disconnect()
-            self.session = asyncio.create_task(self.stream(command['device_id'], quiet=command.get('quiet') is True))
+            self.session = asyncio.create_task(self.stream(command['device_id'], quiet=command.get('quiet') is True, identity_account=command.get('identity_account'), pending=command.get('pending') is True))
         elif action == 'enroll':
             await self.disconnect()
             self.session = asyncio.create_task(self.enroll(command['device_id'], command.get('allow_missing_band_key')))
         elif action == 'disconnect':
-            await self.disconnect()
+            emit('state', state='disconnecting')
+            clean = await self.disconnect()
+            emit('state', state='disconnected')
+            if clean:
+                emit('handoff_ready', message='Local connection closed and automatic connection paused. Connect on iPhone to confirm Bluetooth availability.')
+            else:
+                emit('handoff_unconfirmed', message='Local cleanup reported an error. Automatic connection is paused. Check diagnostics and retry Disconnect before using iPhone; do not re-enroll.')
         elif action == 'shutdown':
             await self.models.cancel()
             await self.disconnect()

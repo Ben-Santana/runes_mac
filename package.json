@@ -6,13 +6,14 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5190 --strictPort",
-    "desktop": "tsc -p electron/tsconfig.json && concurrently -k \"vite --host 127.0.0.1 --port 5190 --strictPort\" \"wait-on http://127.0.0.1:5190 && electron . --dev\"",
-    "build": "tsc --noEmit && tsc -p electron/tsconfig.json && vite build",
+    "desktop": "tsc -p electron/tsconfig.json && npm run build:identity-qr && concurrently -k \"vite --host 127.0.0.1 --port 5190 --strictPort\" \"wait-on http://127.0.0.1:5190 && electron . --dev\"",
+    "build": "tsc --noEmit && tsc -p electron/tsconfig.json && npm run build:identity-qr && vite build",
     "start": "electron .",
     "test:python": ".venv/bin/python -m unittest discover -s tests",
     "test:ui": "node scripts/ui-smoke.mjs",
     "test:motions": "node scripts/motions-smoke.mjs",
     "test:api": "node scripts/api-smoke.mjs",
+    "test:connection": "node scripts/connection-stability-smoke.mjs && node scripts/startup-smoke.mjs",
     "test:startup": "node scripts/startup-smoke.mjs",
     "package:mac": "node node_modules/electron/install.js && node scripts/create-icons.mjs && npm run build && python3 scripts/package-macos.py",
     "test:models": "node scripts/model-tests-smoke.mjs",
@@ -20,7 +21,8 @@
     "test:air:cursor": "node scripts/air-cursor-native-smoke.mjs && node scripts/air-cursor-smoke.mjs",
     "test:air:feature": "node scripts/air-feature-smoke.mjs",
     "test:air:math": "node scripts/air-gesture-math.mjs",
-    "test:air:engine": "npm run build && node scripts/air-engine-smoke.mjs"
+    "test:air:engine": "npm run build && node scripts/air-engine-smoke.mjs",
+    "build:identity-qr": "swiftc scripts/identity-qr.swift -o dist-electron/identity-qr"
   },
   "dependencies": {
     "@fontsource/geist": "^5.2.8",

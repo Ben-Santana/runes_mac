@@ -8,7 +8,7 @@ try {
    window.commands=[];
    window.band={send:command=>window.commands.push(command),onMessage:callback=>{window.emitBand=callback;return()=>{window.emitBand=null;};}};
   });
-  await page.goto('http://127.0.0.1:5190');
+  await page.goto(process.env.PREVIEW_URL||'http://127.0.0.1:5190');
   await page.waitForFunction(()=>window.commands.some(c=>c.action==='discover'));
   const scans=await page.evaluate(()=>window.commands.filter(c=>c.action==='discover'));
   assert.equal(scans.length,1,'StrictMode must not scan twice');

@@ -1,0 +1,60 @@
+import assert from 'node:assert/strict';
+import {chromium} from 'playwright-core';
+import fs from 'node:fs';
+const url=process.env.PREVIEW_URL||'http://127.0.0.1:5190';
+const output=process.env.SMOKE_OUTPUT||'/private/tmp/neural-connection-ui';
+fs.mkdirSync(output,{recursive:true});
+const account='11111111-1111-1111-1111-111111111111';
+const band='22222222-2222-2222-2222-222222222222';
+const browser=await chromium.launch({channel:'chrome',headless:true});
+try{
+ const page=await browser.newPage({viewport:{width:1440,height:1000}});
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.addInitScript(({account})=>{
+  window.commands=[];window.listeners=[];
+  window.emitBand=m=>window.listeners.forEach(cb=>cb(m));
+  window.band={send:c=>{window.commands.push(c);if(c.action==='identities')queueMicrotask(()=>window.emitBand({kind:'identities',identities:[{account,pending:false,stage:'host_verified',fingerprint:'a'.repeat(64),eligible:true,has_band_key:false},{account,pending:true,stage:'confirmed',fingerprint:'b'.repeat(64),eligible:true,has_band_key:false}]}));},onMessage:cb=>{window.listeners.push(cb);return()=>{window.listeners=window.listeners.filter(x=>x!==cb);};}};
+ },{account});
+ await page.goto(url);
+ await page.waitForFunction(()=>window.commands.some(c=>c.action==='discover'));
+ await page.evaluate(band=>{const scan=window.commands.find(c=>c.action==='discover');window.emitBand({kind:'devices',request_id:scan.request_id,devices:[{id:band,name:'Meta Band'}]});},band);
+ await page.waitForFunction(()=>window.commands.some(c=>c.action==='connect'));
+ await page.evaluate(band=>{window.emitBand({kind:'connection_recovery',device_id:band,category:'identity',message:'Choose the saved identity. Enrollment has not started.'});window.emitBand({kind:'state',state:'disconnected'});},band);
+ const dialog=page.getByRole('dialog');await dialog.waitFor();
+ assert.equal(await page.evaluate(()=>window.commands.filter(c=>c.action==='enroll').length),0);
+ const scans=await page.evaluate(()=>window.commands.filter(c=>c.action==='discover').length);
+ await page.waitForTimeout(1000);
+ assert.equal(await page.evaluate(()=>window.commands.filter(c=>c.action==='discover').length),scans,'Recovery pauses automatic scans');
+ await page.locator('#connection-identity').selectOption(`${account}:saved`);
+ await dialog.getByRole('button',{name:'Connect',exact:true}).click();
+ assert.deepEqual(await page.evaluate(()=>window.commands.filter(c=>c.action==='connect').at(-1)),{action:'connect',device_id:band,identity_account:account,pending:false});
+ await page.evaluate(account=>{window.emitBand({kind:'identity_selected',account});window.emitBand({kind:'state',state:'connected'});},account);
+ await dialog.waitFor({state:'hidden'});
+ await page.getByRole('button',{name:'Device settings',exact:true}).click();
+ await page.getByRole('button',{name:'Disconnect',exact:true}).click();
+ await dialog.waitFor();
+ await dialog.getByRole('button',{name:'Releasing…',exact:true}).waitFor();
+ assert.equal(await dialog.getByRole('button',{name:'Releasing…',exact:true}).isDisabled(),true);
+ await page.evaluate(()=>{window.emitBand({kind:'state',state:'disconnected'});window.emitBand({kind:'handoff_ready',message:'Local connection closed. Connect on iPhone to confirm Bluetooth availability.'});});
+ await dialog.getByText('More options',{exact:true}).click();
+ await dialog.getByRole('button',{name:'Sign in with Meta again',exact:true}).click();
+ assert.equal(await page.evaluate(()=>window.commands.filter(c=>c.action==='enroll').length),0,'Opening confirmation never enrolls');
+ await dialog.getByRole('button',{name:'Keep existing ownership',exact:true}).click();
+ for(const width of [1440,768,390]){
+  await page.setViewportSize({width,height:1000});
+  await page.evaluate(()=>window.scrollTo(0,0));
+  await page.waitForTimeout(150);
+  const box=await dialog.boundingBox();assert.ok(box.y>=0&&box.y+box.height<=1001,'Recovery controls stay inside viewport');
+  await page.screenshot({path:`${output}/connection-${width}.png`});
+ }
+ await dialog.getByRole('button',{name:'Sign in with Meta again',exact:true}).click();
+ await dialog.getByRole('button',{name:'Confirm ownership enrollment',exact:true}).click();
+ assert.deepEqual(await page.evaluate(()=>window.commands.filter(c=>c.action==='enroll').at(-1)),{action:'enroll',device_id:band,allow_missing_band_key:true});
+ await page.evaluate(band=>{window.emitBand({kind:'connection_recovery',device_id:band,category:'cancelled',message:'Meta sign-in canceled. Automatic connection is paused.'});window.emitBand({kind:'state',state:'disconnected'});},band);
+ await page.waitForTimeout(1000);
+ assert.equal(await page.evaluate(()=>window.commands.filter(c=>c.action==='enroll').length),1);
+ await page.reload();await page.waitForTimeout(1000);
+ assert.equal(await page.evaluate(()=>window.commands.filter(c=>c.action==='discover'||c.action==='connect'||c.action==='enroll').length),0,'Cancel/pause survives reload');
+ assert.deepEqual(errors,[]);
+ console.log('Connection UI passed: explicit identity reuse, enrollment confirmation, cancellation, persistent pause, handoff cleanup state; screenshots at 1440/768/390.');
+}finally{await browser.close();}
