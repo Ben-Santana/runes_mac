@@ -24,7 +24,7 @@ globalThis.localStorage = {
 };
 const bundle = await build({entryPoints: ['src/connectBell.ts'], bundle: true, write: false, platform: 'node', format: 'esm'});
 const sounds = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
-const configure = change => localStorage.setItem('neural.sounds.v1', JSON.stringify({step: 'whole', success: 'whole', radial: 'whole', connection: 'whole', ...change}));
+const configure = change => localStorage.setItem('runes.sounds.v1', JSON.stringify({step: 'whole', success: 'whole', radial: 'whole', connection: 'whole', ...change}));
 const checkScale = (count, label) => {
  assert.equal(notes.length, count, label);
  for (let i = 1; i < notes.length; i++) {

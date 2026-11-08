@@ -1,4 +1,4 @@
-# Neural / Band Studio
+# Runes / Band Studio
 Question: what is the band collecting right now?
 Face: an isometric electrode bracelet and eight stacked ink traces, on white.
 Data: eight unsigned ADC channels at 2048 Hz, 16 samples per batch; gyro wire values;

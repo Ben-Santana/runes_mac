@@ -43,17 +43,17 @@ jobs:
         run: npm run package:mac
       - name: Verify packaged app and checksum
         run: |
-          codesign --verify --deep --strict release/dmg/Neural.app
-          PYTHONHOME="$PWD/release/dmg/Neural.app/Contents/Resources/runtime" \
-            release/dmg/Neural.app/Contents/Resources/runtime/bin/python3.12 \
+          codesign --verify --deep --strict release/dmg/Runes.app
+          PYTHONHOME="$PWD/release/dmg/Runes.app/Contents/Resources/runtime" \
+            release/dmg/Runes.app/Contents/Resources/runtime/bin/python3.12 \
             -c 'import meta_neural_py; import ssl; print("Bundled Python ready")'
-          test -x release/dmg/Neural.app/Contents/Resources/app/dist-electron/neural-phone-link || find release/dmg/Neural.app -name neural-phone-link | grep -q .
-          hdiutil verify release/Neural-*-arm64.dmg
+          test -x release/dmg/Runes.app/Contents/Resources/app/dist-electron/runes-phone-link || find release/dmg/Runes.app -name runes-phone-link | grep -q .
+          hdiutil verify release/Runes-*-arm64.dmg
           cd release
-          shasum -a 256 Neural-*-arm64.dmg > SHA256SUMS.txt
+          shasum -a 256 Runes-*-arm64.dmg > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: Neural-macOS-arm64-${{ github.run_number }}
+          name: Runes-macOS-arm64-${{ github.run_number }}
           path: |
             release/*.dmg
             release/SHA256SUMS.txt
@@ -67,7 +67,7 @@ jobs:
           VERSION=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")
           TAG="v${VERSION}-build.${GITHUB_RUN_NUMBER}"
           cat > release/notes.md <<'NOTES'
-          Download the arm64 DMG below, open it, and drag Neural into Applications.
+          Download the arm64 DMG below, open it, and drag Runes into Applications.
 
           Requires an Apple Silicon Mac and macOS 13 or later. Python is included.
           This early build is ad-hoc signed, not notarized. If macOS blocks it,
@@ -80,6 +80,6 @@ jobs:
             gh release upload "$TAG" release/*.dmg release/SHA256SUMS.txt --clobber
           else
             gh release create "$TAG" release/*.dmg release/SHA256SUMS.txt \
-              --target "$GITHUB_SHA" --title "Neural ${VERSION} · build ${GITHUB_RUN_NUMBER}" \
+              --target "$GITHUB_SHA" --title "Runes ${VERSION} · build ${GITHUB_RUN_NUMBER}" \
               --notes-file release/notes.md --latest
           fi

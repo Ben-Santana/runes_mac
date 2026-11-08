@@ -6,7 +6,7 @@ try{
  await page.goto('http://127.0.0.1:5190');
  await page.evaluate(()=>localStorage.clear());await page.reload();
  const edit=()=>page.getByRole('button',{name:/^Edit Tap index shortcut/ }).click();
- const open=async()=>{await page.getByRole('button',{name:'Neural actions',exact:true}).click();await page.getByRole('menuitem',{name:'Type text',exact:true}).click();};
+ const open=async()=>{await page.getByRole('button',{name:'Runes actions',exact:true}).click();await page.getByRole('menuitem',{name:'Type text',exact:true}).click();};
  await edit();await open();
  await page.getByRole('button',{name:'Save text',exact:true}).isDisabled().then(v=>assert(v));
  const text='  A longer message — café, 漢字, 👋\nSecond line\n\tIndented text\n'.repeat(200);

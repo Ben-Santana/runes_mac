@@ -3,7 +3,7 @@ import {BrowserWindow} from 'electron';
 export type Credentials = {username:string;password:string};
 export function metaLogin(url:string, credentials:Credentials|null): {result:Promise<string>; cancel:()=>void} {
   if(new URL(url).origin !== 'https://auth.meta.com')throw new Error('Invalid Meta login address');
-  const login = new BrowserWindow({width:640,height:760,show:!credentials,title:'Sign in with Meta',webPreferences:{partition:'neural-meta-login',sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});
+  const login = new BrowserWindow({width:640,height:760,show:!credentials,title:'Sign in with Meta',webPreferences:{partition:'runes-meta-login',sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});
   let done=false, attempted=false, filledUser=false, polling=false;
   let timer:ReturnType<typeof setTimeout>;
   let poll:ReturnType<typeof setInterval>;

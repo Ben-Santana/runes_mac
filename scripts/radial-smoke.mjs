@@ -10,7 +10,7 @@ await page.getByRole('button',{name:'Edit Tap index shortcut',exact:true}).click
 await page.keyboard.press('Meta+c');
 assert.deepEqual(await page.getByRole('button',{name:'Edit Tap index shortcut',exact:true}).locator('kbd').allTextContents(),['⌘','C']);
 await page.getByRole('button',{name:'Edit Tap index shortcut',exact:true}).click();
-await page.getByRole('button',{name:'Neural actions',exact:true}).click();
+await page.getByRole('button',{name:'Runes actions',exact:true}).click();
 await page.getByRole('menuitem',{name:'Radial menu',exact:false}).click();
 await page.getByRole('button',{name:'Add radial item',exact:true}).click();
 for(const width of [1200,768,390]){await page.setViewportSize({width,height:900});await page.waitForTimeout(300);const rect=await page.locator('.radial-slot .adjust-action-toolbar').boundingBox();assert.ok(rect.x>=0&&rect.y>=0&&rect.x+rect.width<=width&&rect.y+rect.height<=900,JSON.stringify({width,rect}));await page.screenshot({path:`/tmp/radial-tooltip-${width}.png`});}
@@ -52,7 +52,7 @@ for(const width of [1200,768,390]){
 await page.setViewportSize({width:1200,height:900});
 await page.screenshot({path:'/tmp/radial-icons-editor.png'});
 await page.getByRole('button',{name:'Save radial menu',exact:true}).click();
-const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('neural.assignments.v1')).find(a=>a.id==='tap-index'));
+const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('runes.assignments.v1')).find(a=>a.id==='tap-index'));
 assert.equal(saved.appAction.items[0].icon,'star');assert.equal(saved.appAction.type,'radial-menu');assert.equal(saved.appAction.items[0].output.shortcut.key,'J');assert.equal(saved.appAction.items[1].output.action,'volume-up');
 await page.getByRole('button',{name:'Edit Tap index shortcut',exact:true}).click();
 assert.equal(await page.getByRole('button',{name:'Edit radial item 1',exact:true}).locator('svg.lucide-star').count(),1);

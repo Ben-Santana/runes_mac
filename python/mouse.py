@@ -28,7 +28,7 @@ def api():
         cg.CFRelease.argtypes = [ctypes.c_void_p]
         _api = cg
     if not _api.AXIsProcessTrusted():
-        raise RuntimeError('Enable Accessibility for Neural and its Python helper to control the mouse.')
+        raise RuntimeError('Enable Accessibility for Runes and its Python helper to control the mouse.')
     return _api
 
 def _pointer(dx=0, dy=0, button=None, kinds=None):

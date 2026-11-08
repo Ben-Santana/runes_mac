@@ -10,7 +10,7 @@ import CryptoKit
 ///     plaintext kinds (pairing and handshake) follow with their own fields;
 ///     sealed kinds follow with: session tag (4) · counter (u32 BE) · ChaCha20-Poly1305 ciphertext + tag (16)
 ///
-/// All integers are big-endian. Canonical copy: NeuralIOS/NeuralIOS/Relay/RelayWire.swift.
+/// All integers are big-endian. Canonical copy: RunesIOS/RunesIOS/Relay/RelayWire.swift.
 /// The Mac app vendors this file byte for byte (mac_os_meta_band_app/scripts/sync-relay-wire.sh).
 enum RelayWire {
     static let version: UInt8 = 1
@@ -33,10 +33,10 @@ enum RelayWire {
         case invalidInvitation, expiredInvitation, invalidPacket, unsupportedVersion, authentication, replay, tokenUsed
         var errorDescription: String? {
             switch self {
-            case .invalidInvitation: return "This isn't a Neural Mac code."
+            case .invalidInvitation: return "This isn't a Runes Mac code."
             case .expiredInvitation: return "This code expired. Scan the new code on your Mac."
             case .invalidPacket: return "The Mac link sent an invalid message."
-            case .unsupportedVersion: return "Update Neural on this iPhone and on your Mac."
+            case .unsupportedVersion: return "Update Runes on this iPhone and on your Mac."
             case .authentication: return "The Mac link could not be verified."
             case .replay: return "The Mac link repeated a message."
             case .tokenUsed: return "This code was already used. Scan the new code on your Mac."
@@ -51,6 +51,8 @@ enum RelayWire {
         // Sealed with the session keys.
         case demand = 0x10, ready = 0x11, gesture = 0x12, gyro = 0x13, orientation = 0x14
         case lease = 0x15, ping = 0x16, pong = 0x17, bye = 0x18
+        /// Either direction: one chunk of the sender's gesture assignments. Older peers ignore this kind.
+        case bindings = 0x19
 
         var sealed: Bool { rawValue >= 0x10 }
     }
@@ -124,6 +126,69 @@ enum RelayWire {
         case ping(UInt16)
         case pong(UInt16, PhoneState)
         case bye(ByeReason)
+        case bindings(BindingsChunk)
+    }
+
+    // MARK: - Gesture assignments shared between the two apps
+
+    /// One assigned gesture or combo. `trigger` is a gesture id (`tap-index`) or a combo's steps joined by
+    /// spaces, each `gesture[:axis[:direction]]` (`hold-index rotation:x:left release-index`).
+    struct Binding: Codable, Equatable, Hashable, Sendable {
+        let trigger: String
+        let profile: String
+        let action: String
+        init(trigger: String, profile: String, action: String) {
+            self.trigger = trigger; self.profile = RelayWire.clip(profile, 40); self.action = RelayWire.clip(action, 60)
+        }
+    }
+
+    struct BindingsChunk: Equatable, Sendable {
+        let generation: UInt16
+        let index: UInt8
+        let count: UInt8
+        let data: Data
+    }
+
+    static let bindingsChunkSize = 120
+    static let bindingsMaxChunks = 48
+
+    /// Splits a binding list into sealed-message chunks. The list is zlib-compressed JSON.
+    static func bindingChunks(_ bindings: [Binding], generation: UInt16) -> [Message] {
+        var list = bindings
+        while true {
+            let json = (try? JSONEncoder().encode(list.map { [$0.trigger, $0.profile, $0.action] })) ?? Data("[]".utf8)
+            let packed = (try? (json as NSData).compressed(using: .zlib) as Data) ?? Data()
+            let count = max(1, (packed.count + bindingsChunkSize - 1) / bindingsChunkSize)
+            if count <= bindingsMaxChunks || list.isEmpty {
+                return (0..<count).map { i in
+                    let start = i * bindingsChunkSize
+                    let part = packed.subdata(in: min(start, packed.count)..<min(start + bindingsChunkSize, packed.count))
+                    return .bindings(BindingsChunk(generation: generation, index: UInt8(i), count: UInt8(count), data: part))
+                }
+            }
+            list.removeLast(max(1, list.count / 4))
+        }
+    }
+
+    /// Collects chunks until one generation is complete.
+    struct BindingsAssembler {
+        private var generation: UInt16?
+        private var parts: [UInt8: Data] = [:]
+        private var count: UInt8 = 0
+
+        mutating func add(_ chunk: BindingsChunk) -> [Binding]? {
+            guard chunk.count > 0, chunk.index < chunk.count else { return nil }
+            if chunk.generation != generation || chunk.count != count {
+                generation = chunk.generation; count = chunk.count; parts = [:]
+            }
+            parts[chunk.index] = chunk.data
+            guard parts.count == Int(count) else { return nil }
+            let packed = (0..<count).reduce(into: Data()) { $0.append(parts[$1] ?? Data()) }
+            parts = [:]
+            guard let json = try? (packed as NSData).decompressed(using: .zlib) as Data,
+                  let rows = try? JSONDecoder().decode([[String]].self, from: json) else { return nil }
+            return rows.compactMap { $0.count == 3 ? Binding(trigger: $0[0], profile: $0[1], action: $0[2]) : nil }
+        }
     }
 
     // MARK: - Byte helpers
@@ -203,7 +268,7 @@ enum RelayWire {
         return UUID(uuid: (b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]))
     }
 
-    private static func label(_ text: String) -> Data { Data("neural-relay/v1/\(text)".utf8) }
+    private static func label(_ text: String) -> Data { Data("runes-relay/v1/\(text)".utf8) }
 
     private static func hash(_ parts: Data...) -> Data {
         var hasher = SHA256()
@@ -242,7 +307,7 @@ enum RelayWire {
 
     /// The Mac's QR code: a short-lived public key and a one-time token. It never carries a long-lived secret.
     struct Invitation: Equatable {
-        static let prefix = "NEURALMAC1:"
+        static let prefix = "RUNESMAC1:"
         let macKey: Data
         let token: Data
         let expires: Date
@@ -538,6 +603,10 @@ enum RelayWire {
         case .bye(let reason):
             w.u8(reason.rawValue)
             return (.bye, w.data)
+        case .bindings(let chunk):
+            guard chunk.data.count <= bindingsChunkSize else { throw Failure.invalidPacket }
+            w.u16(chunk.generation); w.u8(chunk.index); w.u8(chunk.count); w.bytes(chunk.data)
+            return (.bindings, w.data)
         case .event(let event):
             w.u32(UInt32(truncatingIfNeeded: event.sequence)); w.u64(event.timestamp); w.u16(ageMilliseconds(event, now: now))
             switch event.kind {
@@ -574,6 +643,9 @@ enum RelayWire {
             message = .pong(try r.u16(), try state(&r))
         case .bye:
             message = .bye(ByeReason(rawValue: try r.u8()) ?? .normal)
+        case .bindings:
+            let generation = try r.u16(), index = try r.u8(), count = try r.u8()
+            message = .bindings(BindingsChunk(generation: generation, index: index, count: count, data: try r.bytes(r.remaining)))
         case .gesture, .gyro, .orientation:
             let sequence = UInt64(try r.u32()), timestamp = try r.u64()
             let age = TimeInterval(try r.u16()) / 1000

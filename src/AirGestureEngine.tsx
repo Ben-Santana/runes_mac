@@ -3,7 +3,7 @@ import type {PointerEvent} from 'react';
 import {normalizeQuaternion} from './SensorVisuals';
 import {normalizePath,pathData,pathLength,rankAirGestures,rotatePath,wristPoint} from './airGesture';
 import type {AirTemplate,Point2} from './airGesture';
-const storageKey='neural.air-gestures.v1';
+const storageKey='runes.air-gestures.v1';
 function loadTemplates():AirTemplate[]{
  try{const data=JSON.parse(localStorage.getItem(storageKey)||'[]');return Array.isArray(data)?data.filter(t=>typeof t?.id==='string'&&typeof t?.name==='string'&&Array.isArray(t.points)&&t.points.length<=4096&&t.points.every((p:unknown)=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite))&&normalizePath(t.points).length):[];}catch{return [];}
 }

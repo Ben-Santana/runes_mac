@@ -1,4 +1,4 @@
-# Neural technical and experiment guide
+# Runes technical and experiment guide
 
 A local Electron instrument for Meta Neural Band data. React + TypeScript + Tailwind,
 with an isolated Python bridge using `meta-neural-py==0.1.0a1`.
@@ -19,14 +19,14 @@ Set `BAND_PYTHON` to override the Python executable.
 `npm run dev` opens the browser preview at http://127.0.0.1:5190. Use **Explore demo**
 to inspect simulated streams. Bluetooth requires the Electron app.
 `npm run build && npm start` runs the compiled production interface in Electron.
-Run `npm run package:mac` on Apple Silicon to create `release/Neural-0.1.0-arm64.dmg`.
-The app bundles Python and its dependencies. Drag Neural to Applications. This local
+Run `npm run package:mac` on Apple Silicon to create `release/Runes-0.1.0-arm64.dmg`.
+The app bundles Python and its dependencies. Drag Runes to Applications. This local
 build is ad-hoc signed and is not notarized; if blocked, allow it in System Settings
 → Privacy & Security → Open Anyway. Requires macOS 13 or later on Apple Silicon.
 
 ## Connect
 
-> The app receives gestures from Neural on iPhone (README → Connect your iPhone; design in `NeuralIOS/Documentation/MacLink.md`). The direct band steps below apply only to development runs with `NEURAL_DIRECT_BAND=1`.
+> The app receives gestures from Runes on iPhone (README → Connect your iPhone; design in `RunesIOS/Documentation/MacLink.md`). The direct band steps below apply only to development runs with `RUNES_DIRECT_BAND=1`.
 
 
 1. Put the band into pairing mode and choose **Connect band → Scan for bands**.
@@ -96,11 +96,11 @@ Tap and rotate means an index tap followed within 650ms by a wrist orientation c
 
 Verification: `npm run build`, `npm run test:python`, `npm run test:ui`, and `node scripts/motions-smoke.mjs`.
 
-While automatic connection is enabled, Neural scans for nearby bands. A single discovered band connects automatically using its saved identity; multiple bands open the connection picker. No bands leaves the app disconnected. Explicit manual connection, disconnect, or demo actions cancel pending startup auto-connection.
+While automatic connection is enabled, Runes scans for nearby bands. A single discovered band connects automatically using its saved identity; multiple bands open the connection picker. No bands leaves the app disconnected. Explicit manual connection, disconnect, or demo actions cancel pending startup auto-connection.
 
 ### Connection recovery and shared ownership
 
-> The app receives gestures from Neural on iPhone (README → Connect your iPhone; design in `NeuralIOS/Documentation/MacLink.md`). The direct band steps below apply only to development runs with `NEURAL_DIRECT_BAND=1`.
+> The app receives gestures from Runes on iPhone (README → Connect your iPhone; design in `RunesIOS/Documentation/MacLink.md`). The direct band steps below apply only to development runs with `RUNES_DIRECT_BAND=1`.
 
 
 Connect never invokes enrollment. Missing credentials, rejected identity, trust timeout, permission failures, and protocol failures pause for explicit recovery. Transport failures retry at 1, 2, and 4 seconds, then pause. Canceling Meta sign-in also pauses the UI's automatic discovery/connect loop, persistently across launches.
@@ -116,11 +116,11 @@ Disconnect pauses automatic connection and waits for worker cleanup before repor
 In Device settings → App behavior, enable **Save Meta password on this Mac**, enter
 both your Meta email/phone number and password, then choose **Save to Keychain**.
 This is off by default. The credentials are stored in macOS Keychain under
-`org.neural.meta-login.v1`, separately from your band identity, and are never written
+`org.runes.meta-login.v1`, separately from your band identity, and are never written
 to app preferences or Git. Use **Forget Meta password** (or switch the setting off)
 to delete them. This does not remove your band identity.
 
-During enrollment, Neural attempts password sign-in in an isolated login window.
+During enrollment, Runes attempts password sign-in in an isolated login window.
 Password filling is restricted to `https://auth.meta.com`. If automatic entry fails,
 the window appears after 12 seconds so you can finish sign-in, verification or a
 CAPTCHA. Credentials are attempted once per enrollment; Meta can still require
@@ -136,7 +136,7 @@ X/Y/Z axis, assign decrease and increase actions, and set sensitivity from 1
 Clicking the dial opens the custom movement dropdown; hover the movement to adjust
 sensitivity. Assigning both directions saves and enables a new assignment automatically;
 later edits save inline. Click either direction's keycap to record keys or choose
-macOS actions, API calls, or Neural profile actions from the same action toolbar.
+macOS actions, API calls, or Runes profile actions from the same action toolbar.
 Use the small + beside a direction to append actions into a sequence. Existing
 keyboard-only adjustments remain compatible. Each movement step executes the
 selected action or sequence through the regular delivery path. Adjustment is an exclusive action rather than
@@ -267,7 +267,7 @@ supports gain/reference/bit-width-dependent conversion; our 0.2008 µV/count val
 still has not been confirmed from this band's calibration parameters.
 Sources: [official decoder](https://github.com/facebookresearch/projectaria_tools/blob/main/core/data_provider/players/NeuralBandBatchPlayer.cpp),
 [official calibration](https://github.com/facebookresearch/projectaria_tools/blob/main/core/calibration/NeuralBandEmgCalibration.cpp),
-[pose input units](https://facebookresearch.github.io/neuroai/neuralbench/tasks/emg/pose.html).
+[pose input units](https://facebookresearch.github.io/neuroai/runesbench/tasks/emg/pose.html).
 
 Firmware compatibility check (October 30, 2026): this physical band's setting
 replies omit protobuf default-zero scalars. Its collection boolean is an empty

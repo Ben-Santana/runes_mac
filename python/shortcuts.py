@@ -134,7 +134,7 @@ class MacKeyboard:
             self.cg.CGEventPost.argtypes = [ctypes.c_uint32,ctypes.c_void_p]
             self.cg.CFRelease.argtypes = [ctypes.c_void_p]
         if not self.cg.AXIsProcessTrusted():
-            raise RuntimeError('Enable Accessibility for Neural and its Python helper in System Settings to send shortcuts.')
+            raise RuntimeError('Enable Accessibility for Runes and its Python helper in System Settings to send shortcuts.')
     def send(self, shortcut):
         with self.lock:
             self._send(shortcut)

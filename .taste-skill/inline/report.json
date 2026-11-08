@@ -105,7 +105,7 @@
       "size": 27,
       "vw": 1.9,
       "font": "Geist",
-      "text": "neural"
+      "text": "runes"
      },
      "monoShare": 0,
      "monoProseShare": 0,
@@ -434,7 +434,7 @@
     },
     "headings": [
      {
-      "text": "neural.",
+      "text": "runes.",
       "words": 1,
       "chars": 7,
       "lines": 1,
@@ -510,7 +510,7 @@
       "size": 27,
       "vw": 3.5,
       "font": "Geist",
-      "text": "neural"
+      "text": "runes"
      },
      "monoShare": 0,
      "monoProseShare": 0,
@@ -836,7 +836,7 @@
     },
     "headings": [
      {
-      "text": "neural.",
+      "text": "runes.",
       "words": 1,
       "chars": 7,
       "lines": 1,
@@ -910,7 +910,7 @@
       "size": 24,
       "vw": 6.2,
       "font": "Geist",
-      "text": "neural"
+      "text": "runes"
      },
      "monoShare": 0,
      "monoProseShare": 0,

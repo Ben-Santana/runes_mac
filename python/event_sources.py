@@ -1,7 +1,7 @@
 """Where band events come from. The shortcut engine only sees band-shaped packets, whatever the source.
 
-The Mac's gesture source is Neural on a paired iPhone (`PhoneEventSource`). The direct band connection in
-bridge.py stays available for development behind NEURAL_DIRECT_BAND=1, and feeds the same sink.
+The Mac's gesture source is Runes on a paired iPhone (`PhoneEventSource`). The direct band connection in
+bridge.py stays available for development behind RUNES_DIRECT_BAND=1, and feeds the same sink.
 """
 import asyncio
 import dataclasses
@@ -39,6 +39,9 @@ class EventSink:
         """`pairing` is {'text', 'image', 'expires'} or None when the code is gone."""
 
     def on_bluetooth(self, state):
+        pass
+
+    def on_bindings(self, bindings):
         pass
 
     def on_log(self, message):
@@ -134,6 +137,7 @@ class PhoneEventSource(EventSource):
         self.holding = False
         self.pairing = False
         self.closing = False
+        self.bindings = []
 
     def _write(self, command):
         process = self.process
@@ -160,6 +164,10 @@ class PhoneEventSource(EventSource):
     def forget(self, phone_id=None):
         self._write({'cmd': 'forget', **({'id': phone_id} if phone_id else {})})
 
+    def set_bindings(self, entries):
+        self.bindings = entries
+        self._write({'cmd': 'bindings', 'entries': entries})
+
     def request_status(self):
         self._write({'cmd': 'status'})
 
@@ -180,6 +188,8 @@ class PhoneEventSource(EventSource):
                 self._write({'cmd': 'holding', 'value': True})
             if self.pairing:
                 self.show_pairing(True)
+            if self.bindings:
+                self.set_bindings(self.bindings)
             try:
                 while line := await self.process.stdout.readline():
                     try:
@@ -220,6 +230,9 @@ class PhoneEventSource(EventSource):
         elif kind == 'pairing':
             text = message.get('text')
             sink.on_pairing({'text': text, 'image': message.get('image'), 'expires': message.get('expires')} if text else None)
+        elif kind == 'bindings':
+            entries = message.get('entries')
+            sink.on_bindings({'phone': message.get('phone'), 'entries': entries if isinstance(entries, list) else []})
         elif kind == 'bluetooth':
             sink.on_bluetooth(message.get('state'))
         elif kind == 'log':

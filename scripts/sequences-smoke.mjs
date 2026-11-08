@@ -22,7 +22,7 @@ try{
  await row.locator('.action-step button').first().focus();await page.keyboard.press('Alt+ArrowRight');
  assert.equal(await row.locator('.action-step').first().getAttribute('data-tooltip'),'Command + C');
  await page.getByRole('button',{name:'Add action to Tap index',exact:true}).click();
- await page.getByRole('button',{name:'Neural actions',exact:true}).click();
+ await page.getByRole('button',{name:'Runes actions',exact:true}).click();
  assert.equal(await page.getByRole('menuitem',{name:'Desktop profile picker',exact:false}).isDisabled(),true);
  await page.locator('h1').click();
  await page.getByRole('button',{name:'Add action to Tap index',exact:true}).click();

@@ -7,22 +7,22 @@ try{
  await page.evaluate(()=>localStorage.clear());await page.reload();
  for(const name of ['Tap index','Tap middle','Double tap index','Double tap middle']){
   await page.getByRole('button',{name:`Edit ${name} shortcut`,exact:true}).click();
-  await page.getByRole('button',{name:'Neural actions',exact:true}).click();
+  await page.getByRole('button',{name:'Runes actions',exact:true}).click();
   assert.equal(await page.getByRole('menuitem',{name:'Desktop profile picker',exact:true}).isDisabled(),true);
   await page.locator('h1').click();
  }
  await page.getByRole('button',{name:'Add profile',exact:true}).click();
  await page.getByRole('button',{name:'Use work icon',exact:true}).click();
  await page.getByRole('button',{name:'Edit Swipe left shortcut',exact:true}).click();
- await page.getByRole('button',{name:'Neural actions',exact:true}).click();
+ await page.getByRole('button',{name:'Runes actions',exact:true}).click();
  await page.getByRole('menuitem',{name:'Desktop profile picker',exact:true}).click();
  await page.screenshot({path:'/tmp/picker-setup.png'});
  await page.getByRole('menuitem',{name:'Use in all profiles',exact:true}).click();
- let saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('neural.profiles.v1')));
+ let saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('runes.profiles.v1')));
  assert.ok(saved.profiles.every(p=>p.assignments.find(a=>a.id==='swipe-left').appAction.type==='open-profile-picker'));
  await page.getByRole('button',{name:'Add profile',exact:true}).click();await page.getByRole('button',{name:'Use music icon',exact:true}).click();
  await page.reload();
- saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('neural.profiles.v1')));
+ saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('runes.profiles.v1')));
  assert.equal(saved.profiles.length,3);
  assert.ok(saved.profiles.every(p=>p.assignments.find(a=>a.id==='swipe-left').appAction.type==='open-profile-picker'));
  // Clicking an existing picker opens the same positioning controls as a radial menu.
@@ -38,7 +38,7 @@ try{
  await page.mouse.up();
  await handle.press('ArrowRight');
  await editor.getByRole('button',{name:'Save radial menu'}).click();
- saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('neural.profiles.v1')));
+ saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('runes.profiles.v1')));
  const positions=saved.profiles[0].assignments.find(a=>a.id==='swipe-left').appAction.positions;
  assert.ok(Object.values(positions).some(angle=>angle>0));
  assert.ok(saved.profiles.every(p=>JSON.stringify(p.assignments.find(a=>a.id==='swipe-left').appAction.positions)===JSON.stringify(positions)));
@@ -50,7 +50,7 @@ try{
  await page.getByRole('button',{name:'Cancel radial menu'}).click();
  page.once('dialog',d=>d.accept());
  await page.getByRole('button',{name:'Remove Swipe left shortcut',exact:true}).click();
- saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('neural.profiles.v1')));
+ saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('runes.profiles.v1')));
  assert.ok(!saved.profiles.find(p=>p.id===saved.activeId).assignments.find(a=>a.id==='swipe-left').appAction);
  assert.ok(saved.profiles.filter(p=>p.id!==saved.activeId).every(p=>p.assignments.find(a=>a.id==='swipe-left').appAction.type==='open-profile-picker'));
  assert.deepEqual(saved.sharedIds,[]);

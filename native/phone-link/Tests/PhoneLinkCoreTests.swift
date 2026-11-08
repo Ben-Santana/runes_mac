@@ -145,7 +145,7 @@ struct PhoneLinkCoreTests {
         precondition(states(core.wake(now: 70)) == [.searching])
         precondition(states(core.tick(now: 91)) == [.away])
 
-        // Disconnect releases. A phone whose app closed shows "open Neural on iPhone once".
+        // Disconnect releases. A phone whose app closed shows "open Runes on iPhone once".
         for packet in sent(core.receive(phone.hello(), from: peer, service: pairing.service, now: 92)) { _ = try phone.receive(packet) }
         precondition(releases(core.unsubscribed(peer, service: pairing.service, now: 93)) == 1)
         for packet in sent(core.receive(phone.hello(), from: peer, service: pairing.service, now: 94)) { _ = try phone.receive(packet) }

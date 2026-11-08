@@ -4,9 +4,9 @@ const browser=await chromium.launch({channel:'chrome',headless:true});
 try{
  const page=await browser.newPage({viewport:{width:1100,height:850}});
  await page.goto('http://127.0.0.1:5190');
- await page.evaluate(()=>localStorage.setItem('neural.profiles.v1',JSON.stringify({activeId:'a',profiles:[{id:'a',name:'Source',assignments:[{id:'tap-index',shortcut:{key:'K',modifiers:['command']},enabled:true},{id:'combo-shared',steps:[{gesture:'hold-index'},{gesture:'swipe-left'}],intervalMs:500,shortcut:{key:'J',modifiers:[]},enabled:true}]},{id:'b',name:'Other',assignments:[]}]})));
+ await page.evaluate(()=>localStorage.setItem('runes.profiles.v1',JSON.stringify({activeId:'a',profiles:[{id:'a',name:'Source',assignments:[{id:'tap-index',shortcut:{key:'K',modifiers:['command']},enabled:true},{id:'combo-shared',steps:[{gesture:'hold-index'},{gesture:'swipe-left'}],intervalMs:500,shortcut:{key:'J',modifiers:[]},enabled:true}]},{id:'b',name:'Other',assignments:[]}]})));
  await page.reload();
- const saved=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('neural.profiles.v1')));
+ const saved=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('runes.profiles.v1')));
  const share=async(id)=>{await page.locator(`[data-assignment-id="${id}"]`).click({button:'right'});await page.getByRole('menuitem',{name:'Use in all profiles',exact:true}).click();};
  page.once('dialog',d=>d.accept());await share('tap-index');
  let state=await saved();assert.deepEqual(state.sharedIds,['tap-index']);assert.ok(state.profiles.every(p=>p.assignments.find(a=>a.id==='tap-index').shortcut.key==='K'));

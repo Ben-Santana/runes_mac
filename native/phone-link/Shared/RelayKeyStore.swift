@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 /// Long-term relay pairings, one Keychain item each. The phone keeps one per Mac; the Mac keeps one per phone.
-/// Canonical copy: NeuralIOS/NeuralIOS/Relay/RelayKeyStore.swift (vendored by the Mac app).
+/// Canonical copy: RunesIOS/RunesIOS/Relay/RelayKeyStore.swift (vendored by the Mac app).
 enum RelayKeyStore {
     struct Record: Codable, Equatable, Sendable {
         let id: UUID
@@ -14,11 +14,11 @@ enum RelayKeyStore {
         var pairing: RelayWire.Pairing { RelayWire.Pairing(id: id, secret: secret) }
     }
 
-    static let service = "com.neural.relay.v1"
+    static let service = "com.runes.relay.v1"
     /// The single shared key used by the BLE prototype. Deleted on first launch of this version.
     private static let prototype: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
-        kSecAttrService as String: "com.neural.ble-prototype.v1",
+        kSecAttrService as String: "com.runes.ble-prototype.v1",
         kSecAttrAccount as String: "relay-key"
     ]
 

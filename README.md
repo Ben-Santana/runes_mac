@@ -1,28 +1,28 @@
-# Neural
+# Runes
 
 Control your Mac with your Meta Neural Band. Turn finger gestures, holds, and wrist movements into keyboard shortcuts, app actions, and gesture combos.
 
-![Neural desktop app](docs/desktop-demo.png)
+![Runes desktop app](docs/desktop-demo.png)
 
 ## Download and install
 
-**[Download Neural for Mac](https://github.com/Ben-Santana/neural/releases/latest)** · [All releases](https://github.com/Ben-Santana/neural/releases)
+**[Download Runes for Mac](https://github.com/Ben-Santana/runes/releases/latest)** · [All releases](https://github.com/Ben-Santana/runes/releases)
 
-Neural requires an **Apple Silicon Mac, macOS 13 or later**, and a compatible Meta Neural Band. Intel Macs and other operating systems are not supported. Python and the Bluetooth dependencies are included in the app.
+Runes requires an **Apple Silicon Mac, macOS 13 or later**, and a compatible Meta Neural Band. Intel Macs and other operating systems are not supported. Python and the Bluetooth dependencies are included in the app.
 
 1. Download the `.dmg` from the latest release's **Assets** section.
-2. Open it and drag **Neural** into **Applications**.
-3. Launch Neural from Applications. Current builds are ad-hoc signed and aren't notarized by Apple. If macOS blocks opening the app, go to **System Settings → Privacy & Security → Open Anyway**.
-4. Allow **Bluetooth** access when prompted, so Neural can hear from your iPhone. To send shortcuts or control the pointer, enable Neural in **System Settings → Privacy & Security → Accessibility**. You can open these settings from Device settings in the app.
+2. Open it and drag **Runes** into **Applications**.
+3. Launch Runes from Applications. Current builds are ad-hoc signed and aren't notarized by Apple. If macOS blocks opening the app, go to **System Settings → Privacy & Security → Open Anyway**.
+4. Allow **Bluetooth** access when prompted, so Runes can hear from your iPhone. To send shortcuts or control the pointer, enable Runes in **System Settings → Privacy & Security → Accessibility**. You can open these settings from Device settings in the app.
 
-Neural is an early release. Band firmware compatibility and gesture recognition still need broader hardware testing. Start with a few simple assignments and try them in an app where you can see their effect.
+Runes is an early release. Band firmware compatibility and gesture recognition still need broader hardware testing. Start with a few simple assignments and try them in an app where you can see their effect.
 
 ## Connect your iPhone
 
-Neural on Mac receives your band's gestures from **Neural on your iPhone**. The iPhone holds the band; the Mac never connects to it directly.
+Runes on Mac receives your band's gestures from **Runes on your iPhone**. The iPhone holds the band; the Mac never connects to it directly.
 
-1. On first launch, the Mac shows a code. Open Neural on your iPhone and scan it. Accept the Bluetooth request on iPhone if one appears.
-2. That's it. Neural opens at login and runs in the menu bar, which shows **Connected to iPhone**, **iPhone not nearby**, or **Open Neural on iPhone once** (after the iPhone restarts or Neural was closed on it).
+1. On first launch, the Mac shows a code. Open Runes on your iPhone and scan it. Accept the Bluetooth request on iPhone if one appears.
+2. That's it. Runes opens at login and runs in the menu bar, which shows **Connected to iPhone**, **iPhone not nearby**, or **Open Runes on iPhone once** (after the iPhone restarts or Runes was closed on it).
 
 The link comes back by itself after Mac sleep, walking away, and app restarts. To add another iPhone or remove one, use **Device settings → iPhone**.
 
@@ -42,11 +42,11 @@ Assignments are saved locally. Shortcuts pause while editing, in Device settings
 
 Open **Device settings → Open device test** to view the event and gesture inspectors and air gestures. Live EMG signals, model experiments and native handwriting need a direct band connection and are hidden for now. Snapshots export the bounded display history, rather than an entire recording session.
 
-- **iPhone not nearby:** bring the iPhone within Bluetooth range and check Bluetooth on both. If it is nearby, open Neural on the iPhone once.
-- **Connected but no gestures:** check in Neural on iPhone that the band is connected, then try index or middle taps.
+- **iPhone not nearby:** bring the iPhone within Bluetooth range and check Bluetooth on both. If it is nearby, open Runes on the iPhone once.
+- **Connected but no gestures:** check in Runes on iPhone that the band is connected, then try index or middle taps.
 - **Shortcuts don't run:** check Accessibility permission, that the assignment is enabled, and that you're outside the editor and device test views.
 
-[Report a problem](https://github.com/Ben-Santana/neural/issues) with your macOS version, Mac model, app release, and steps to reproduce it. Don't include passwords, tokens, or private sensor captures.
+[Report a problem](https://github.com/Ben-Santana/runes/issues) with your macOS version, Mac model, app release, and steps to reproduce it. Don't include passwords, tokens, or private sensor captures.
 
 ## Privacy and experimental features
 
@@ -79,7 +79,7 @@ npm run test:air:math
 npm run package:mac
 ```
 
-The package command creates `release/Neural-<version>-arm64.dmg` with a bundled Python runtime. Build on an Apple Silicon Mac. Browser smoke scripts and hardware-specific checks are documented in the [technical guide](docs/technical-guide.md).
+The package command creates `release/Runes-<version>-arm64.dmg` with a bundled Python runtime. Build on an Apple Silicon Mac. Browser smoke scripts and hardware-specific checks are documented in the [technical guide](docs/technical-guide.md).
 
 ## Automatic releases
 
@@ -87,13 +87,13 @@ Every push to `main` runs the [macOS release workflow](.github/workflows/release
 
 Each release has a unique tag such as `v0.1.0-build.12` and keeps its own download. The most recently published release is available through the Download link above. The same files are also retained as workflow artifacts for 30 days. Use the workflow's **Run workflow** button on `main` to rebuild manually. Re-running a completed run replaces that run's release assets.
 
-These are automatically published early builds, not Apple-notarized releases. No signing secrets are required for the current ad-hoc builds. Installing a newer version is manual: download its DMG, quit Neural, and replace the app in Applications.
+These are automatically published early builds, not Apple-notarized releases. No signing secrets are required for the current ad-hoc builds. Installing a newer version is manual: download its DMG, quit Runes, and replace the app in Applications.
 
 ## iPhone link internals
 
-The link is a native helper (`native/phone-link`, built to `dist-electron/neural-phone-link` by `npm run build`) started by the Python bridge, which feeds its events into the same shortcut engine the band transport used. The protocol and pairing code are shared with the iPhone app; `scripts/sync-relay-wire.sh` copies them from `../NeuralIOS` and `npm run test:phone-link` fails if they drift. Design, packet format, safety rules and the hardware checklist: `NeuralIOS/Documentation/MacLink.md`.
+The link is a native helper (`native/phone-link`, built to `dist-electron/runes-phone-link` by `npm run build`) started by the Python bridge, which feeds its events into the same shortcut engine the band transport used. The protocol and pairing code are shared with the iPhone app; `scripts/sync-relay-wire.sh` copies them from `../RunesIOS` and `npm run test:phone-link` fails if they drift. Design, packet format, safety rules and the hardware checklist: `RunesIOS/Documentation/MacLink.md`.
 
-The direct band connection (`meta_neural_py`, enrollment, identity handoff) remains in `python/bridge.py` for development only. It is off unless `NEURAL_DIRECT_BAND=1`, and the UI no longer exposes it.
+The direct band connection (`meta_neural_py`, enrollment, identity handoff) remains in `python/bridge.py` for development only. It is off unless `RUNES_DIRECT_BAND=1`, and the UI no longer exposes it.
 
 Checks: `npm run test:python`, `npm run test:phone-link`, and with a preview running (`npx vite preview --port 5190`), `npm run test:connection`. The UI checks mock the bridge; hardware behavior needs the checklist.
 
@@ -102,8 +102,8 @@ Checks: `npm run test:python`, `npm run test:phone-link`, and with a preview run
 Ad-hoc signed builds get a new code identity on every update, so macOS forgets the Accessibility permission (and may ask again for Keychain access to the iPhone pairing). The fix is Developer ID signing plus notarization:
 
 1. Enroll in the Apple Developer Program and create a **Developer ID Application** certificate.
-2. Sign with the hardened runtime: `codesign --force --options runtime --timestamp --entitlements <entitlements.plist> --sign "Developer ID Application: …"`, signing nested binaries (`neural-phone-link`, the Python runtime's `.so`/`.dylib` files) before the app. The bundled Python needs `com.apple.security.cs.allow-unsigned-executable-memory` and `com.apple.security.cs.disable-library-validation`.
-3. Notarize and staple: `xcrun notarytool submit Neural.dmg --keychain-profile neural --wait`, then `xcrun stapler staple`.
+2. Sign with the hardened runtime: `codesign --force --options runtime --timestamp --entitlements <entitlements.plist> --sign "Developer ID Application: …"`, signing nested binaries (`runes-phone-link`, the Python runtime's `.so`/`.dylib` files) before the app. The bundled Python needs `com.apple.security.cs.allow-unsigned-executable-memory` and `com.apple.security.cs.disable-library-validation`.
+3. Notarize and staple: `xcrun notarytool submit Runes.dmg --keychain-profile runes --wait`, then `xcrun stapler staple`.
 4. In CI, import the certificate from an encrypted secret into a temporary keychain and store the notary API key as a secret.
 
 With a stable Team ID, Accessibility and Keychain grants survive updates, and Gatekeeper no longer needs **Open Anyway**.

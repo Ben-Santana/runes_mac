@@ -337,13 +337,13 @@ function hideWindow() {
   window.hide();
   app.dock?.hide();
 }
-// The Mac's only gesture source is Neural on iPhone. Its status lives in the menu bar.
+// The Mac's only gesture source is Runes on iPhone. Its status lives in the menu bar.
 let phoneLink:{state:string;phone?:string|null}={state:'starting'};
-const phoneStatusText=()=>({connected:'Connected to iPhone',away:'iPhone not nearby',open_app:'Open Neural on iPhone once',unpaired:'Pair your iPhone',searching:'Connecting to iPhone…',sleeping:'iPhone not nearby',unavailable:'iPhone link unavailable'} as Record<string,string>)[phoneLink.state]??'Starting…';
+const phoneStatusText=()=>({connected:'Connected to iPhone',away:'iPhone not nearby',open_app:'Open Runes on iPhone once',unpaired:'Pair your iPhone',searching:'Connecting to iPhone…',sleeping:'iPhone not nearby',unavailable:'iPhone link unavailable'} as Record<string,string>)[phoneLink.state]??'Starting…';
 function refreshTray(){
   if(!tray)return;
-  tray.setToolTip(`Neural — ${phoneStatusText()}`);
-  tray.setContextMenu(Menu.buildFromTemplate([{label:phoneStatusText(),enabled:false},{type:'separator'},{label:'Open Neural',click:showWindow},{type:'separator'},{label:'Quit Neural',click:()=>app.quit()}]));
+  tray.setToolTip(`Runes — ${phoneStatusText()}`);
+  tray.setContextMenu(Menu.buildFromTemplate([{label:phoneStatusText(),enabled:false},{type:'separator'},{label:'Open Runes',click:showWindow},{type:'separator'},{label:'Quit Runes',click:()=>app.quit()}]));
 }
 function phoneLinkMessage(message:any){
   if(message?.kind!=='phone_link'||typeof message.state!=='string')return;
@@ -422,7 +422,7 @@ ipcMain.handle('meta:credentials',async(event,request)=>{
   if(quitting || !isLiveWindow(window) || event.sender!==window.webContents)throw new Error('Unknown settings sender');
   if(!['status','save','forget'].includes(request?.action))throw new Error('Invalid credential action');
   const result=await credentialsCommand({action:request.action,username:request.username,password:request.password});
-  if(request.action==='forget'){loginRequest=undefined;activeLogin?.cancel();await session.fromPartition('neural-meta-login').clearStorageData();}
+  if(request.action==='forget'){loginRequest=undefined;activeLogin?.cancel();await session.fromPartition('runes-meta-login').clearStorageData();}
   return result;
 });
 let activeLogin:ReturnType<typeof metaLogin>|undefined;
@@ -446,7 +446,7 @@ function startWorker() {
   const localPython = path.join(root, '.venv/bin/python');
   const bundledPython = path.join(process.resourcesPath, 'runtime/bin/python3.12');
   const executable = app.isPackaged ? bundledPython : (process.env.BAND_PYTHON || (fs.existsSync(localPython) ? localPython : 'python3'));
-  worker = spawn(executable, ['-u', path.join(root, 'python/bridge.py')], { cwd: app.isPackaged ? app.getPath('userData') : root, env: {...process.env, PYTHONHOME: app.isPackaged ? path.join(process.resourcesPath, 'runtime') : process.env.PYTHONHOME, PYTHONNOUSERSITE:'1', PYTHONDONTWRITEBYTECODE:'1', NEURAL_MODEL_HOME:path.join(app.getPath('userData'),'model-lab'), NEURAL_IDENTITY_MAP:path.join(app.getPath('userData'),'band-identities.json'),NEURAL_PHONE_LINK:path.join(root,'dist-electron/neural-phone-link'),NEURAL_PHONE_LINK_STATE:path.join(app.getPath('userData'),'phone-link.json')} });
+  worker = spawn(executable, ['-u', path.join(root, 'python/bridge.py')], { cwd: app.isPackaged ? app.getPath('userData') : root, env: {...process.env, PYTHONHOME: app.isPackaged ? path.join(process.resourcesPath, 'runtime') : process.env.PYTHONHOME, PYTHONNOUSERSITE:'1', PYTHONDONTWRITEBYTECODE:'1', RUNES_MODEL_HOME:path.join(app.getPath('userData'),'model-lab'), RUNES_IDENTITY_MAP:path.join(app.getPath('userData'),'band-identities.json'),RUNES_PHONE_LINK:path.join(root,'dist-electron/runes-phone-link'),RUNES_PHONE_LINK_STATE:path.join(app.getPath('userData'),'phone-link.json')} });
   workerCommand({action:'air_preview',enabled:airCursorOverlay});
   createInterface({input:worker.stdout}).on('line', line => { try { const message=JSON.parse(line);if(message.kind==='meta_login')void handleMetaLogin(message);else if(message.kind==='meta_login_cancel'){if(loginRequest===message.request_id){loginRequest=undefined;activeLogin?.cancel();}}else{phoneLinkMessage(message);publish(message);} } catch { publish({kind:'error',message:'Invalid bridge response'}); } });
   worker.stderr.on('data', data => publish({kind:'log',message:data.toString().slice(0,2000)}));
@@ -507,7 +507,7 @@ ipcMain.on('band:command', (event, command) => {
     return;
   }
   // Direct band commands are not forwarded: the Mac receives gestures only from iPhone.
-  if(!['configure_shortcuts','suspend_shortcuts','phone_status','phone_pair','phone_forget','motion_view','shutdown','native_handwriting_status','native_handwriting_start','native_handwriting_stop','native_handwriting_clear','model_status','model_leave','model_install','model_cancel','model_capture_start','model_capture_stop','model_run'].includes(command.action)) return;
+  if(!['configure_shortcuts','suspend_shortcuts','phone_status','phone_pair','phone_forget','phone_bindings','motion_view','shutdown','native_handwriting_status','native_handwriting_start','native_handwriting_stop','native_handwriting_clear','model_status','model_leave','model_install','model_cancel','model_capture_start','model_capture_stop','model_run'].includes(command.action)) return;
   startWorker(); worker?.stdin.write(JSON.stringify(command)+'\n');
 });
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -519,7 +519,7 @@ app.whenReady().then(() => {
   if(process.platform==='darwin'&&app.isPackaged&&!fs.existsSync(firstRunPath)){try{app.setLoginItemSettings({openAtLogin:true});fs.mkdirSync(app.getPath('userData'),{recursive:true});fs.writeFileSync(firstRunPath,'1');}catch{/* Login Items may need approval in System Settings. */}}
   const backgroundLaunch = process.platform === 'darwin' && app.getLoginItemSettings().wasOpenedAtLogin;
   ensureTray();
-  window = new BrowserWindow({show:!backgroundLaunch,width:1450,height:950,minWidth:860,minHeight:680,title:'Neural — Motions',backgroundColor:'#ffffff',titleBarStyle:'hiddenInset',webPreferences:{preload:path.join(root,'dist-electron/preload.cjs'),backgroundThrottling:false,contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  window = new BrowserWindow({show:!backgroundLaunch,width:1450,height:950,minWidth:860,minHeight:680,title:'Runes — Motions',backgroundColor:'#ffffff',titleBarStyle:'hiddenInset',webPreferences:{preload:path.join(root,'dist-electron/preload.cjs'),backgroundThrottling:false,contextIsolation:true,nodeIntegration:false,sandbox:true}});
   syncComboViewer();syncAirCursor();startWorker();
   screen.on('display-added',refreshNotchGeometry);
   screen.on('display-removed',refreshNotchGeometry);

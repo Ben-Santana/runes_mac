@@ -21,7 +21,7 @@ try{
  for(const width of [1440,768,390]){await page.setViewportSize({width,height:900});await page.screenshot({path:`/tmp/air-editor-${width}.png`});const bounds=await dialog.boundingBox();assert.ok(bounds.x>=0&&bounds.x+bounds.width<=width&&bounds.y>=0&&bounds.y+bounds.height<=900);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
  await page.getByRole('button',{name:'Save air gesture',exact:true}).click();
  await page.reload();assert.equal(await page.getByRole('button',{name:'Edit Combo 1 air gesture 2'}).count(),1);
- let assignments=await page.evaluate(()=>JSON.parse(localStorage.getItem('neural.assignments.v1')));
+ let assignments=await page.evaluate(()=>JSON.parse(localStorage.getItem('runes.assignments.v1')));
  let combo=assignments.find(a=>a.steps);assert.equal(combo.steps[1].air.minSimilarity,83);assert.equal('name' in combo.steps[1].air,false);assert.equal(combo.steps[1].air.durationMs,2500);assert.ok(combo.steps[1].air.points.length===64);
  // Air cannot be first or immediately follow another air gesture.
  await page.getByRole('button',{name:'Combo 1 gesture 1:',exact:false}).click();assert.equal(await page.getByRole('menuitemradio',{name:'Air gesture',exact:true}).count(),0);await page.keyboard.press('Escape');
@@ -33,7 +33,7 @@ try{
  await page.getByRole('button',{name:'Start recording',exact:true}).click();
  for(let i=0;i<16;i++){const a=i/15*.6;await page.evaluate(a=>window.airEmit({kind:'events',events:[{type:'Orientation',values:[Math.cos(a/2),Math.sin(a/2),0,0]}]}),a);await page.waitForTimeout(22);}
  await page.getByRole('button',{name:/Stop ·/}).click();await page.getByRole('button',{name:'Save air gesture',exact:true}).click();
- assignments=await page.evaluate(()=>JSON.parse(localStorage.getItem('neural.assignments.v1')));combo=assignments.find(a=>a.steps);assert.equal(combo.steps[1].air.durationMs,600);
+ assignments=await page.evaluate(()=>JSON.parse(localStorage.getItem('runes.assignments.v1')));combo=assignments.find(a=>a.steps);assert.equal(combo.steps[1].air.durationMs,600);
  // Cancel edits retains saved settings, restores the parent focus and suspension.
  await page.getByRole('button',{name:'Edit Combo 1 air gesture 2'}).click();await page.getByRole('slider',{name:'Minimum similarity'}).fill('40');await page.keyboard.press('Escape');assert.equal(await dialog.count(),0);assert.equal(await page.getByRole('button',{name:'Edit Combo 1 air gesture 2'}).count(),1);
  await page.getByRole('button',{name:'Edit Combo 1 air gesture 2'}).click();await page.getByRole('button',{name:'Save air gesture'}).focus();await page.keyboard.press('Shift+Tab');assert.equal(await page.evaluate(()=>document.activeElement.getAttribute('aria-label')),'Time to perform');await page.keyboard.press('Escape');

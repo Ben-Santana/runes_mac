@@ -7,13 +7,13 @@ try{
  await page.evaluate(()=>localStorage.clear());await page.reload();
  await page.getByRole('button',{name:'Edit Swipe left shortcut',exact:true}).click();
  const api=await page.getByRole('button',{name:'Configure API call'}).boundingBox();
- const neural=await page.getByRole('button',{name:'Neural actions',exact:true}).boundingBox();
- assert(api.x<neural.x);
+ const runes=await page.getByRole('button',{name:'Runes actions',exact:true}).boundingBox();
+ assert(api.x<runes.x);
  await page.getByRole('button',{name:'Configure API call'}).click();
  await page.getByLabel('URL',{exact:true}).fill('https://example.com/hook?q=1');
  await page.getByLabel('Headers (JSON)',{exact:true}).fill('{"Authorization":"Bearer test","Content-Type":"application/json"}');
  await page.getByLabel('Request body',{exact:true}).fill('{"on":true}');
- await page.screenshot({path:'/tmp/neural-api-popup.png'});
+ await page.screenshot({path:'/tmp/runes-api-popup.png'});
  await page.getByRole('button',{name:'Save API call',exact:true}).click();
  assert.equal(await page.getByRole('dialog').count(),0);
  await page.reload();

@@ -23,7 +23,7 @@ try{
  assert.equal((await page.getByRole('dialog').innerText()).trim(),'');
  assert.equal(await page.locator('.picker-tile svg').count(),3);
  const tile=await page.locator('.picker-tile').first().boundingBox();assert.equal(tile.width,28);
- await page.screenshot({path:'/tmp/neural-compact-radial.png'});
+ await page.screenshot({path:'/tmp/runes-compact-radial.png'});
  await page.locator('.picker-tile').first().click();assert.equal((await page.evaluate(()=>window.lastCommand)).profileId,'key');
  await page.evaluate(profiles=>window.deliver({kind:'picker_state',state:{compact:true,profiles,selected:0,angle:0}}),profiles);
  await page.getByRole('dialog',{name:'Desktop profile picker',exact:true}).waitFor();

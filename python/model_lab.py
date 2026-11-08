@@ -13,7 +13,7 @@ MODELS = ('handwriting', 'pose')
 class ModelLab:
     def __init__(self, emit, root=None):
         self.emit = emit
-        self.root = Path(root or os.environ.get('NEURAL_MODEL_HOME', Path.home() / 'Library/Application Support/Neural/model-lab'))
+        self.root = Path(root or os.environ.get('RUNES_MODEL_HOME', Path.home() / 'Library/Application Support/Runes/model-lab'))
         self.job = None
         self.process = None
         self.active = None

@@ -2,7 +2,7 @@ import AppKit
 import CoreBluetooth
 import CoreImage
 
-/// The Mac app's only gesture source: Neural on a paired iPhone. The Mac is the BLE peripheral and
+/// The Mac app's only gesture source: Runes on a paired iPhone. The Mac is the BLE peripheral and
 /// publishes one GATT service per paired phone (plus a pairing service while the code is showing).
 ///
 /// Protocol with the Python bridge, one JSON object per line.
@@ -10,7 +10,8 @@ import CoreImage
 ///         {"kind":"event","type":"Gesture"|"Gyroscope"|"Orientation",…} · {"kind":"release","reason":…}
 ///         {"kind":"bluetooth","state":"on"|"off"|"unauthorized"|"unsupported"} · {"kind":"log","message":…}
 /// stdin:  {"cmd":"demand","active":…,"gyro":…,"orientation":…} · {"cmd":"holding","value":…}
-///         {"cmd":"pairing","show":…} · {"cmd":"forget","id":…?} · {"cmd":"quit"}
+///         {"cmd":"pairing","show":…} · {"cmd":"forget","id":…?} · {"cmd":"bindings","entries":[{trigger,profile,action}]} · {"cmd":"quit"}
+/// stdout also: {"kind":"bindings","phone":…,"entries":[…]}
 final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
     private struct Hosted {
         let service: CBMutableService
@@ -96,6 +97,14 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
         case "forget":
             let id = (command["id"] as? String).flatMap(UUID.init(uuidString:))
             apply(core.forget(id, now: Self.now))
+        case "bindings":
+            let rows = command["entries"] as? [[String: Any]] ?? []
+            let list = rows.compactMap { row -> RelayWire.Binding? in
+                guard let trigger = row["trigger"] as? String, let profile = row["profile"] as? String,
+                      let action = row["action"] as? String else { return nil }
+                return RelayWire.Binding(trigger: trigger, profile: profile, action: action)
+            }
+            apply(core.setBindings(list, now: Self.now))
         case "status":
             publishState(force: true)
             if let offer = core.offer { emitPairing(offer.invitation) }
@@ -209,6 +218,9 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
                 saveMemory()
             case .log(let message):
                 Self.trace(message)
+            case .bindings(let list, let phone):
+                Self.write(["kind": "bindings", "phone": phone,
+                            "entries": list.map { ["trigger": $0.trigger, "profile": $0.profile, "action": $0.action] }])
             }
         }
     }
@@ -284,7 +296,7 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
         }
         if !outbox.isEmpty || !manager.updateValue(packet, for: entry.control, onSubscribedCentrals: [central]) {
             outbox.append((entry.control, central, packet))
-            if outbox.count > 64 { outbox.removeFirst(outbox.count - 64) }
+            if outbox.count > 128 { outbox.removeFirst(outbox.count - 128) }
         }
     }
 
@@ -392,9 +404,9 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
 
     // MARK: Output
 
-    /// Connection diagnostics, never keys or codes: ~/Library/Logs/Neural/phone-link.log
+    /// Connection diagnostics, never keys or codes: ~/Library/Logs/Runes/phone-link.log
     private static let logHandle: FileHandle? = {
-        let folder = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Neural", isDirectory: true)
+        let folder = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Runes", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appendingPathComponent("phone-link.log")
         if let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int, size > 2_000_000 { try? FileManager.default.removeItem(at: url) }

@@ -166,12 +166,12 @@ class PhoneSourceTests(unittest.IsolatedAsyncioTestCase):
 class PairingMessageTests(unittest.IsolatedAsyncioTestCase):
     async def test_pairing_code_reaches_the_ui(self):
         # The helper's message carries its own "kind"; forwarding it must not collide with emit's.
-        path, _ = PhoneSourceTests().helper([{'kind': 'pairing', 'text': 'NEURALMAC1:abc', 'image': 'data:image/png;base64,AA', 'expires': 1.0, 'mac': 'Studio'}])
+        path, _ = PhoneSourceTests().helper([{'kind': 'pairing', 'text': 'RUNESMAC1:abc', 'image': 'data:image/png;base64,AA', 'expires': 1.0, 'mac': 'Studio'}])
         worker = bridge.Bridge()
         with patch.object(bridge, 'emit') as emitted:
             await PhoneSourceTests().run_source(worker, path, lambda: worker.pairing is not None)
-        self.assertEqual(worker.pairing['text'], 'NEURALMAC1:abc')
-        emitted.assert_any_call('phone_pairing', text='NEURALMAC1:abc', image='data:image/png;base64,AA', expires=1.0)
+        self.assertEqual(worker.pairing['text'], 'RUNESMAC1:abc')
+        emitted.assert_any_call('phone_pairing', text='RUNESMAC1:abc', image='data:image/png;base64,AA', expires=1.0)
 
 
 class GateTests(unittest.IsolatedAsyncioTestCase):

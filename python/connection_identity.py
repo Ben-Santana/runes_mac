@@ -18,7 +18,7 @@ from meta_neural_py.identity.trust import load_point, public_point
 
 class IdentityBindings:
     def __init__(self, path=None):
-        self.path = Path(path or os.environ.get('NEURAL_IDENTITY_MAP', Path.home() / 'Library/Application Support/Neural/band-identities.json'))
+        self.path = Path(path or os.environ.get('RUNES_IDENTITY_MAP', Path.home() / 'Library/Application Support/Runes/band-identities.json'))
 
     def read(self):
         if not self.path.exists():

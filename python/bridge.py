@@ -53,8 +53,8 @@ except ImportError:
         from python.mouse import holding as mouse_holding
 
 
-# The Mac never connects to the band unless a developer opts in. Its gesture source is Neural on iPhone.
-DIRECT_BAND = __import__('os').environ.get('NEURAL_DIRECT_BAND') == '1'
+# The Mac never connects to the band unless a developer opts in. Its gesture source is Runes on iPhone.
+DIRECT_BAND = __import__('os').environ.get('RUNES_DIRECT_BAND') == '1'
 DIRECT_BAND_ACTIONS = ('discover', 'identities', 'connect', 'enroll', 'disconnect')
 
 try:
@@ -123,6 +123,8 @@ class Bridge(EventSink):
         self.link = {'state': 'starting', 'phone': None, 'phones': []}
         self.pairing = None
         self.bluetooth = None
+        self.phone_bindings = {'phone': None, 'entries': []}
+        self.mac_bindings = []
         self.assignments = []
         self.viewing_motion = False
         self.last_flush = 0.0
@@ -185,6 +187,10 @@ class Bridge(EventSink):
         self.pairing = pairing
         emit('phone_pairing', **(pairing or {'text': None}))
 
+    def on_bindings(self, bindings):
+        self.phone_bindings = bindings
+        emit('phone_bindings', **bindings)
+
     def on_bluetooth(self, state):
         self.bluetooth = state
         emit('phone_bluetooth', state=state)
@@ -198,9 +204,10 @@ class Bridge(EventSink):
 
     def start_source(self):
         import os
-        executable = os.environ.get('NEURAL_PHONE_LINK') or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'dist-electron', 'neural-phone-link')
-        self.source = PhoneEventSource(executable, os.environ.get('NEURAL_PHONE_LINK_STATE'))
+        executable = os.environ.get('RUNES_PHONE_LINK') or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'dist-electron', 'runes-phone-link')
+        self.source = PhoneEventSource(executable, os.environ.get('RUNES_PHONE_LINK_STATE'))
         self.update_demand()
+        self.source.bindings = self.mac_bindings
         self.source_task = asyncio.create_task(self.source.run(self))
         self.source_task.add_done_callback(self._source_ended)
 
@@ -509,11 +516,18 @@ class Bridge(EventSink):
             emit('phone_pairing', **(self.pairing or {'text': None}))
             if self.bluetooth:
                 emit('phone_bluetooth', state=self.bluetooth)
+            emit('phone_bindings', **self.phone_bindings)
             if self.source:
                 self.source.request_status()
         elif action == 'phone_pair':
             if self.source:
                 self.source.show_pairing(command.get('show') is not False)
+        elif action == 'phone_bindings':
+            entries = command.get('entries')
+            if isinstance(entries, list):
+                self.mac_bindings = [e for e in entries if isinstance(e, dict)][:400]
+                if self.source:
+                    self.source.set_bindings(self.mac_bindings)
         elif action == 'phone_forget':
             if self.source:
                 phone_id = command.get('id')

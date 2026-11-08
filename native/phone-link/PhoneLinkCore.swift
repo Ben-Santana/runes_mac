@@ -31,6 +31,8 @@ final class PhoneLinkCore {
         case removed(UUID)
         case remember(UUID, PhoneMemory)
         case log(String)
+        /// The phone's gesture assignments, received whole.
+        case bindings([RelayWire.Binding], phone: String)
     }
 
     /// What the Mac remembers about a phone between launches. Not secret.
@@ -52,6 +54,7 @@ final class PhoneLinkCore {
         var pingID: UInt16 = 0
         var holdReleased = false
         var lastReset: TimeInterval = -.infinity
+        var assembler = RelayWire.BindingsAssembler()
         var service: UUID { record.pairing.service }
     }
 
@@ -62,6 +65,8 @@ final class PhoneLinkCore {
     private(set) var sleeping = false
     private var startedAt: TimeInterval
     private var lastState: (LinkState, String?)?
+    private(set) var bindings: [RelayWire.Binding] = []
+    private var bindingsGeneration: UInt16 = 0
     static let searchGrace: TimeInterval = 20
 
     init(records: [RelayKeyStore.Record], memory: [UUID: PhoneMemory] = [:], now: TimeInterval) {
@@ -94,6 +99,18 @@ final class PhoneLinkCore {
     }
 
     // MARK: Inputs
+
+    /// This Mac's assignments, sent to every connected phone now and to each phone that connects later.
+    func setBindings(_ next: [RelayWire.Binding], now: TimeInterval) -> [Output] {
+        guard next != bindings else { return [] }
+        bindings = next
+        bindingsGeneration &+= 1
+        return phones.keys.filter { phones[$0]?.session != nil }.flatMap { sendBindings($0, now: now) }
+    }
+
+    private func sendBindings(_ id: UUID, now: TimeInterval) -> [Output] {
+        RelayWire.bindingChunks(bindings, generation: bindingsGeneration).flatMap { seal(id, $0, now: now) }
+    }
 
     func setDemand(_ next: Demand, now: TimeInterval) -> [Output] {
         guard next != demand else { return [] }
@@ -211,6 +228,7 @@ final class PhoneLinkCore {
                 var out: [Output] = hadSession ? [.release("iPhone started a new session")] : []
                 out.append(.send(peer: peer, service: service, packet: RelayWire.macHello(phone.record.pairing, phoneNonce: phoneNonce, macNonce: macNonce)))
                 out += seal(id, .demand(effectiveDemand), now: now)
+                out += sendBindings(id, now: now)
                 if firstConnection || phone.memory.appClosed { out.append(.remember(id, next.memory)) }
                 return out + stateChange(now)
             } catch {
@@ -262,10 +280,13 @@ final class PhoneLinkCore {
                 return [.release("iPhone removed this Mac"), .removed(id)] + stateChange(now)
             case .terminating:
                 phones[id]?.memory.appClosed = true
-                return [.release("Neural closed on iPhone"), .remember(id, phones[id]!.memory)] + stateChange(now)
+                return [.release("Runes closed on iPhone"), .remember(id, phones[id]!.memory)] + stateChange(now)
             default:
                 return [.release("iPhone disconnected")] + stateChange(now)
             }
+        case .bindings(let chunk):
+            guard let list = phones[id]?.assembler.add(chunk) else { return [] }
+            return [.bindings(list, phone: phone.record.name)]
         case .demand, .ping:
             return []
         }

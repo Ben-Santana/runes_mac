@@ -8,7 +8,7 @@ try{
   const listeners=new Set();
   window.band={send(){},onMessage(fn){listeners.add(fn);return()=>listeners.delete(fn);}};
   window.emitBand=message=>listeners.forEach(fn=>fn(message));
-  localStorage.setItem('neural.assignments.v1',JSON.stringify([{id:'combo-live',enabled:false,shortcut:null,intervalMs:500,steps:[{gesture:'hold-index'},{gesture:'release-index'},{gesture:'swipe-left'}]}]));
+  localStorage.setItem('runes.assignments.v1',JSON.stringify([{id:'combo-live',enabled:false,shortcut:null,intervalMs:500,steps:[{gesture:'hold-index'},{gesture:'release-index'},{gesture:'swipe-left'}]}]));
  });
  await page.goto('http://127.0.0.1:5190');
  await page.getByText('Make a gesture',{exact:true}).waitFor();

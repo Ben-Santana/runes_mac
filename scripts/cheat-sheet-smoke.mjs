@@ -7,14 +7,14 @@ try{
  await page.goto('http://127.0.0.1:5190');
  await page.evaluate(()=>localStorage.clear());await page.reload();
  await page.getByRole('button',{name:/^Edit Tap index shortcut/}).click();
- await page.getByRole('button',{name:'Neural actions',exact:true}).click();
+ await page.getByRole('button',{name:'Runes actions',exact:true}).click();
  await page.getByRole('menuitem',{name:'Profile cheat sheet',exact:true}).click();
  await page.reload();
  assert.equal(await page.locator('.app-action-cap').first().innerText(),'Profile cheat sheet');
- const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('neural.profiles.v1')));
+ const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('runes.profiles.v1')));
  assert.equal(saved.profiles[0].assignments.find(a=>a.id==='tap-index').appAction.type,'show-cheat-sheet');
  // Customize through the action cap, save per profile, then reload.
- await page.evaluate(()=>{const saved=JSON.parse(localStorage.getItem('neural.profiles.v1'));saved.profiles[0].assignments.find(a=>a.id==='tap-middle').shortcut={key:'C',modifiers:['command']};saved.profiles[0].assignments.find(a=>a.id==='tap-middle').enabled=true;saved.profiles.push({id:'other',name:'Other',assignments:saved.profiles[0].assignments});localStorage.setItem('neural.profiles.v1',JSON.stringify(saved));});
+ await page.evaluate(()=>{const saved=JSON.parse(localStorage.getItem('runes.profiles.v1'));saved.profiles[0].assignments.find(a=>a.id==='tap-middle').shortcut={key:'C',modifiers:['command']};saved.profiles[0].assignments.find(a=>a.id==='tap-middle').enabled=true;saved.profiles.push({id:'other',name:'Other',assignments:saved.profiles[0].assignments});localStorage.setItem('runes.profiles.v1',JSON.stringify(saved));});
  await page.reload();
  const openEditor=()=>page.getByRole('button',{name:/^Edit Tap index shortcut/}).click();
  await openEditor();
@@ -36,7 +36,7 @@ try{
  await page.keyboard.press('Escape');await openEditor();
  assert.equal(await page.getByRole('textbox',{name:'Description for Tap middle',exact:true}).inputValue(),'Copy selection');
  await page.getByRole('button',{name:'Cancel',exact:true}).click();
- const customized=await page.evaluate(()=>JSON.parse(localStorage.getItem('neural.profiles.v1')));
+ const customized=await page.evaluate(()=>JSON.parse(localStorage.getItem('runes.profiles.v1')));
  assert.equal(customized.profiles[0].cheatSheetDescriptions['tap-middle'],'Copy selection');
  assert.equal(customized.profiles[1].cheatSheetDescriptions?.['tap-middle'],undefined);
  await openEditor();await page.getByRole('textbox',{name:'Description for Tap middle',exact:true}).fill('');await page.getByRole('button',{name:'Save descriptions',exact:true}).click();

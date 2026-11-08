@@ -71,7 +71,7 @@ try{
  await page.getByRole('button',{name:'Edit right action',exact:true}).click();
  await page.getByRole('button',{name:'macOS actions',exact:true}).click();
  await page.getByRole('menuitem',{name:'Volume up',exact:true}).click();
- await page.waitForFunction(()=>{const saved=JSON.parse(localStorage.getItem('neural.profiles.v1'));return saved?.profiles?.some(p=>p.assignments.some(a=>a.id==='hold-index'&&a.appAction?.increase?.action==='volume-up'));});
+ await page.waitForFunction(()=>{const saved=JSON.parse(localStorage.getItem('runes.profiles.v1'));return saved?.profiles?.some(p=>p.assignments.some(a=>a.id==='hold-index'&&a.appAction?.increase?.action==='volume-up'));});
  await page.reload();
  assert.match(await page.getByRole('button',{name:'Edit left action',exact:true}).textContent(),/Volume down/);
  assert.match(await page.getByRole('button',{name:'Edit right action',exact:true}).textContent(),/Volume up/);
@@ -81,7 +81,7 @@ try{
  await page.getByRole('button',{name:'Save API call',exact:true}).click();
  assert.match(await page.getByRole('button',{name:'Edit left action',exact:true}).textContent(),/POST example.com/);
  await page.getByRole('button',{name:'Edit right action',exact:true}).click();
- await page.getByRole('button',{name:'Neural actions',exact:true}).click();
+ await page.getByRole('button',{name:'Runes actions',exact:true}).click();
  await page.getByRole('menuitem',{name:'Move profile selector',exact:true}).click();
  await page.getByRole('menuitem',{name:'Down',exact:true}).click();
  await page.getByRole('button',{name:'Add right action',exact:true}).click();
@@ -90,11 +90,11 @@ try{
  await page.reload();
  assert.match(await page.getByRole('button',{name:'Edit right action',exact:true}).textContent(),/Profile down.*Toggle mute/);
  await page.getByRole('button',{name:'Edit right action',exact:true}).click();
- await page.getByRole('button',{name:'Neural actions',exact:true}).click();
+ await page.getByRole('button',{name:'Runes actions',exact:true}).click();
  await page.getByRole('menuitem',{name:'Change to profile',exact:true}).click();
  await page.getByRole('menuitem',{name:'main',exact:true}).click();
  await page.getByRole('button',{name:'Edit left action',exact:true}).click();
- await page.getByRole('button',{name:'Neural actions',exact:true}).click();
+ await page.getByRole('button',{name:'Runes actions',exact:true}).click();
  await page.getByRole('menuitem',{name:'Desktop profile picker',exact:true}).click();
  await page.reload();
  assert.match(await page.getByRole('button',{name:'Edit left action',exact:true}).textContent(),/Desktop profile picker/);
@@ -121,5 +121,5 @@ try{
  await page.getByRole('button',{name:'Remove adjust',exact:true}).click();
  assert.equal(await page.getByRole('group',{name:'Adjust actions',exact:true}).count(),0);
  assert.deepEqual(errors,[]);
- console.log('Adjust UI: keyboard capture, macOS/API/Neural actions, sequences, persistence, eligibility and responsive layout passed.');
+ console.log('Adjust UI: keyboard capture, macOS/API/Runes actions, sequences, persistence, eligibility and responsive layout passed.');
 }finally{await browser.close();}

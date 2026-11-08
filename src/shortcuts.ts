@@ -87,7 +87,7 @@ export const availableKeys=[...'ABCDEFGHIJKLMNOPQRSTUVWXYZ',...'0123456789','Arr
 export function shortcutKeys(s:Shortcut){return s.keys??[s.key];}
 export function validShortcut(s:unknown):s is Shortcut {const v=s as Shortcut;return !!v&&availableKeys.includes(v.key)&&(v.keys===undefined||(Array.isArray(v.keys)&&v.keys.length>0&&v.keys[0]===v.key&&new Set(v.keys).size===v.keys.length&&v.keys.every(k=>availableKeys.includes(k))))&&Array.isArray(v.modifiers)&&v.modifiers.every(m=>modifierKeys.some(k=>k.id===m));}
 export function loadAssignments():Assignment[]{
- let saved:unknown=[];try{saved=JSON.parse(localStorage.getItem('neural.assignments.v1')||'[]');}catch{}
+ let saved:unknown=[];try{saved=JSON.parse(localStorage.getItem('runes.assignments.v1')||'[]');}catch{}
  return normalizeAssignments(saved);
 }
 export function canOpenProfilePicker(id:string){return !id.startsWith('tap-')&&!id.startsWith('double-tap-');}

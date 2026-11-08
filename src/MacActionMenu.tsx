@@ -14,7 +14,7 @@ export function MacActionMenu({initial,onSave,onCancel}:{initial?:AppAction;onSa
   window.addEventListener('resize',place);window.addEventListener('scroll',place,true);
   return()=>{window.removeEventListener('resize',place);window.removeEventListener('scroll',place,true);};
  },[enterApp]);
- return <div ref={menu} className="neural-action-menu mac-action-menu" role={enterApp?'group':'menu'} aria-label={enterApp?'Open an app':'macOS actions'} onKeyDown={e=>{
+ return <div ref={menu} className="runes-action-menu mac-action-menu" role={enterApp?'group':'menu'} aria-label={enterApp?'Open an app':'macOS actions'} onKeyDown={e=>{
   if(e.key==='Escape'){e.preventDefault();e.stopPropagation();onCancel();}
   if(!enterApp&&['ArrowDown','ArrowUp','Home','End'].includes(e.key)){
    e.preventDefault();const items=Array.from(menu.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')??[]);const index=items.indexOf(document.activeElement as HTMLButtonElement);items[e.key==='Home'?0:e.key==='End'?items.length-1:(index+(e.key==='ArrowDown'?1:items.length-1))%items.length]?.focus();

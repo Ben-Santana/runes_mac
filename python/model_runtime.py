@@ -33,7 +33,7 @@ def report(message):
 def download(url, target, expected=None):
     if target.is_file() and expected and hashlib.sha256(target.read_bytes()).hexdigest() == expected:
         return
-    request = urllib.request.Request(url, headers={'User-Agent': 'Neural-Model-Lab/1.0'})
+    request = urllib.request.Request(url, headers={'User-Agent': 'Runes-Model-Lab/1.0'})
     partial = target.with_suffix(target.suffix + '.part')
     digest = hashlib.sha256()
     try:

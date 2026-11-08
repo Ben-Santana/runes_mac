@@ -2,7 +2,7 @@
 import json
 import sys
 
-SERVICE = 'org.neural.meta-login.v1'
+SERVICE = 'org.runes.meta-login.v1'
 
 
 def operate(request):

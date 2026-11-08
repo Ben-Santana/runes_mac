@@ -49,7 +49,7 @@ try {
      renders++;
     }
    }
-   localStorage.setItem('neural.sounds.v1', JSON.stringify({...defaultSoundSettings, step: 'invalid', success: 'glass', radial: 'coin', connection: 'warm'}));
+   localStorage.setItem('runes.sounds.v1', JSON.stringify({...defaultSoundSettings, step: 'invalid', success: 'glass', radial: 'coin', connection: 'warm'}));
    const restored = loadSoundSettings();
    if (restored.step !== 'whole' || restored.success !== 'glass' || restored.radial !== 'coin' || restored.connection !== 'warm') throw new Error('Shared library validation failed');
   } finally {
@@ -67,7 +67,7 @@ try {
   assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width);
   assert.ok(bounds.y >= 0 && bounds.y + bounds.height <= 1000);
   await page.getByRole('menuitemradio', {name: 'Shimmer', exact: true}).scrollIntoViewIfNeeded();
-  await page.screenshot({path: `/tmp/neural-sounds-${width}.png`, fullPage: true});
+  await page.screenshot({path: `/tmp/runes-sounds-${width}.png`, fullPage: true});
   await page.getByRole('menuitemradio', {name: 'Shimmer', exact: true}).press('Escape');
  }
  assert.deepEqual(errors, []);

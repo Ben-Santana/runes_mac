@@ -17,7 +17,7 @@ try {
  await page.getByRole('button',{name:'Save to Keychain',exact:true}).click();
  await page.waitForFunction(()=>document.querySelector('[aria-labelledby="meta-save-label"]').getAttribute('aria-checked')==='true');
  assert.equal(await page.locator('input[type=password]').count(),0);
- await page.screenshot({path:'/tmp/neural-meta-settings.png',fullPage:true});
+ await page.screenshot({path:'/tmp/runes-meta-settings.png',fullPage:true});
  await page.getByRole('button',{name:'Forget Meta password',exact:true}).click();
  await page.waitForFunction(()=>document.querySelector('[aria-labelledby="meta-save-label"]').getAttribute('aria-checked')==='false');
  assert.deepEqual(await page.evaluate(()=>window.credentialActions.filter(a=>a!=='status')),['save','forget']);

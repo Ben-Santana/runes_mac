@@ -3,7 +3,7 @@ import {chromium} from 'playwright-core';
 import fs from 'node:fs';
 // iPhone link UI with a mocked bridge: first-run pairing, menu-style status, removal. Never a direct band connection.
 const url=process.env.PREVIEW_URL||'http://127.0.0.1:5190';
-const output=process.env.SMOKE_OUTPUT||'/private/tmp/neural-phone-link-ui';
+const output=process.env.SMOKE_OUTPUT||'/private/tmp/runes-phone-link-ui';
 fs.mkdirSync(output,{recursive:true});
 const pixel='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==';
 const browser=await chromium.launch({channel:'chrome',headless:true});
@@ -21,9 +21,9 @@ try{
  const emit=m=>page.evaluate(m=>window.emitBand(m),m);
  // First run: the pairing code, with one instruction.
  await emit({kind:'phone_link',state:'unpaired',phone:null,phones:[]});
- await emit({kind:'phone_pairing',text:'NEURALMAC1:x',image:pixel,expires:Date.now()/1000+120});
+ await emit({kind:'phone_pairing',text:'RUNESMAC1:x',image:pixel,expires:Date.now()/1000+120});
  const pairing=page.getByRole('dialog');
- await pairing.getByText('Open Neural on your iPhone and scan this code.').waitFor();
+ await pairing.getByText('Open Runes on your iPhone and scan this code.').waitFor();
  assert.equal(await pairing.locator('img').count(),1);
  for(const width of [1440,768,390]){
   await page.setViewportSize({width,height:900});await page.waitForTimeout(100);
@@ -41,7 +41,7 @@ try{
  await page.getByText('Connected to iPhone').first().waitFor();
  for(const gone of ['Show iPhone QR code','Sign in with Meta again','Manage connection','Disconnect','Scan again','Reconnect band'])
   assert.equal(await page.getByRole('button',{name:gone,exact:true}).count(),0,`${gone} is gone`);
- for(const [state,text] of [['away','iPhone not nearby'],['open_app','Open Neural on iPhone once'],['connected','Connected to iPhone']]){
+ for(const [state,text] of [['away','iPhone not nearby'],['open_app','Open Runes on iPhone once'],['connected','Connected to iPhone']]){
   await emit({kind:'phone_link',state,phone:'Ben’s iPhone',phones});
   await page.locator('.settings-panel').getByText(text,{exact:true}).waitFor();
  }

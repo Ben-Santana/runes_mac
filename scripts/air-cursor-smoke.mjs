@@ -57,9 +57,9 @@ try{
  await emit({kind:'air_preview',active:true,attemptId:'fail',resultId:'fail',result:'failure',points:[[0,0],[.2,0]]});
  const failure=page.getByRole('img',{name:'Air gesture failed'});await failure.waitFor();assert.equal(await failure.locator('.air-cursor-fill').getAttribute('fill'),'#fff');assert.equal(await page.evaluate(()=>window.airNotes),4);
  await page.waitForTimeout(260);await page.screenshot({path:'/tmp/air-cursor-failure.png',omitBackground:true});
- await page.evaluate(()=>localStorage.setItem('neural.sounds.v1',JSON.stringify({airOn:false})));
+ await page.evaluate(()=>localStorage.setItem('runes.sounds.v1',JSON.stringify({airOn:false})));
  await emit({kind:'air_preview',active:true,attemptId:'muted',resultId:'muted',result:'success',points:[[0,0]]});await result.waitFor();assert.equal(await result.locator('.air-cursor-fill').getAttribute('fill'),'#c57aee');assert.equal(await page.evaluate(()=>window.airNotes),4);
- await page.evaluate(()=>localStorage.removeItem('neural.sounds.v1'));
+ await page.evaluate(()=>localStorage.removeItem('runes.sounds.v1'));
  // Settings opt in persists; default remains off.
  await page.setViewportSize({width:1200,height:900});await page.goto('http://127.0.0.1:5190');
  await page.getByRole('button',{name:'Device settings',exact:true}).click();

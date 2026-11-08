@@ -8,11 +8,11 @@ try{
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.goto('http://127.0.0.1:5190');
  await page.getByRole('button',{name:/^Edit Tap index shortcut/}).click();
- await page.getByRole('button',{name:'Neural actions',exact:true}).click();
+ await page.getByRole('button',{name:'Runes actions',exact:true}).click();
  await page.getByRole('menuitem',{name:/Radial menu/}).click();
  const dialog=page.getByRole('dialog',{name:'Radial menu editor',exact:true});
  const button=name=>dialog.getByRole('button',{name,exact:true});
- const saved=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('neural.assignments.v1')).find(a=>a.id==='tap-index').appAction.items[0].output);
+ const saved=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('runes.assignments.v1')).find(a=>a.id==='tap-index').appAction.items[0].output);
  await button('Add radial item').click();
  await page.keyboard.press('Meta+k');
  await button('Add action to radial item 1').click();

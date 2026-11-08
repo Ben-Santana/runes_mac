@@ -49,7 +49,7 @@ export type SoundSettings = {
  connectionOn: boolean;
 };
 
-const key = 'neural.sounds.v1';
+const key = 'runes.sounds.v1';
 export const defaultSoundSettings: SoundSettings = {
  enabled: true,
  airOn: true,
