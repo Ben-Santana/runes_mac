@@ -77,7 +77,9 @@ export function RadialEditor({initial,profiles,onSave,onCancel,fixedProfiles=fal
  if(event.key==='Escape'&&!adding){event.preventDefault();event.stopPropagation();onCancel();}
  if(event.key==='Tab'){const buttons=Array.from(root.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input,select,textarea')??[]).filter(el=>el.getClientRects().length);const first=buttons[0],last=buttons.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}}
  }}><div ref={root} className="radial-editor" data-autospacing={!!autoAngles} role="dialog" aria-modal="true" aria-label={fixedProfiles?"Desktop profile picker editor":"Radial menu editor"} onPointerDown={event=>{if(iconItem&&event.target instanceof Element&&!event.target.closest('.radial-icon-library,.radial-icon-trigger'))setIconItem(null);}} onClick={e=>e.stopPropagation()}>
- <RadialSurface center={<><button className="radial-done" aria-label="Save radial menu" title="Save radial menu" disabled={!items.length||adding} onClick={()=>onSave({type:'radial-menu',items})}><Check size={22}/></button><button className="radial-close" aria-label="Cancel radial menu" title="Cancel" onClick={onCancel}><X size={15}/></button></>}>
+ <RadialSurface center={<>{!fixedProfiles&&items.length<8&&<div className="radial-add-slot">
+ <AdjustActionSlot key={`add-${items.length}`} direction="right" ariaLabel="Add radial item" profiles={profiles} onEditingChange={editing=>{setAdding(editing);if(editing)setIconItem(null);}} onChange={output=>{commit([...items,{id:crypto.randomUUID(),output,...(items.some(i=>i.angle!==undefined)?{angle:addAngle}:{})}]);setAdding(false);}} onRemove={()=>{}}/>
+ </div>}<button className="radial-done" aria-label="Save radial menu" title="Save radial menu" disabled={!items.length||adding} onClick={()=>onSave({type:'radial-menu',items})}><Check size={22}/></button><button className="radial-close" aria-label="Cancel radial menu" title="Cancel" onClick={onCancel}><X size={15}/></button></>}>
  {items.map((item,index)=><div className={`radial-slot ${iconItem===item.id?'is-picking-icon':''} ${dragging===item.id?'is-positioning':''}`} key={item.id} style={radialPosition(index,items.length,displayedAngle(item,index))}>
  <button className="radial-position-handle" disabled={!!autoAngles} aria-label={`Move radial item ${index+1}`} title="Drag to reposition · arrow keys to rotate" style={{'--handle-angle':`${displayedAngle(item,index)}rad`} as CSSProperties}
  onPointerDown={event=>{event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);dragStart.current=items;setDragging(item.id);setIconItem(null);}}
@@ -91,9 +93,6 @@ export function RadialEditor({initial,profiles,onSave,onCancel,fixedProfiles=fal
  <span className="radial-item-tooltip" role="tooltip">{item.name?.trim()||radialLabel(item.output,profiles)}</span>
  </div>)}
  </RadialSurface>
- {!fixedProfiles&&items.length<8&&<div className="radial-slot radial-add-slot">
- <AdjustActionSlot key={`add-${items.length}`} direction="right" ariaLabel="Add radial item" profiles={profiles} onEditingChange={editing=>{setAdding(editing);if(editing)setIconItem(null);}} onChange={output=>{commit([...items,{id:crypto.randomUUID(),output,...(items.some(i=>i.angle!==undefined)?{angle:addAngle}:{})}]);setAdding(false);}} onRemove={()=>{}}/>
- </div>}
- <button className="radial-auto-space" disabled={!items.some(item=>item.angle!==undefined)} onClick={autoSpace}><RotateCcw size={14}/>Auto-space options</button>
+  <button className="radial-auto-space" disabled={!items.some(item=>item.angle!==undefined)} onClick={autoSpace}><RotateCcw size={14}/>Auto-space options</button>
  </div></div>,document.body);
 }

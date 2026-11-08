@@ -51,7 +51,8 @@ export function ProfilePicker(){
    if(reduced.matches){m.position=m.target;m.velocity=0;}
    else {
     // Critically damped spring: continuous velocity, no packet-rate dependence or overshoot.
-    const omega=22,delta=m.position-m.target,decay=Math.exp(-omega*dt);
+    // omega 45 trails a steady turn by ~44 ms (2/omega) while still hiding packet steps.
+    const omega=45,delta=m.position-m.target,decay=Math.exp(-omega*dt);
     const step=(m.velocity+omega*delta)*dt;
     m.position=m.target+(delta+step)*decay;
     m.velocity=(m.velocity-omega*step)*decay;

@@ -158,7 +158,8 @@ class Bridge(EventSink):
             return
         self.handle_event(packet)
         now = time.monotonic()
-        if now - self.last_flush >= 1/30:
+        # Orientation drives the radial menu and cursor live, so it is never held for the 30 Hz batch.
+        if packet.get('type') == 'Orientation' or now - self.last_flush >= 1/30:
             self.flush_events()
         elif self.flush_handle is None:
             self.flush_handle = asyncio.get_running_loop().call_later(1/30, self.flush_events)
@@ -483,9 +484,10 @@ class Bridge(EventSink):
                     last_flush = time.monotonic()
                     last_battery = last_flush
                     async for event in events:
-                        self.handle_event(packet(event))
+                        data = packet(event)
+                        self.handle_event(data)
                         now = time.monotonic()
-                        if now-last_flush >= 1/30:
+                        if data.get('type') == 'Orientation' or now-last_flush >= 1/30:
                             emit('events', events=self.pending, stats=normalize(band.stats))
                             self.pending = []
                             last_flush = now

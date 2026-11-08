@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import type {Packet} from './types';
 
 type Point = [number, number, number];
@@ -53,7 +53,44 @@ const handFaces = [
 // Orthographic camera; its depth vector is perpendicular to both screen axes.
 const project = ([x,y,z]: Point) => [125+(x-y)*.72, 57+(x+y)*.29-z*.83];
 const depth = ([x,y,z]: Point) => x+y+z*(.58/.83);
-export function OrientationVisual({values}: {values: number[]}) {
+/** Shortest-path spherical interpolation between unit quaternions. */
+function slerp(a: Quaternion, b: Quaternion, t: number): Quaternion {
+  let dot = a[0]*b[0]+a[1]*b[1]+a[2]*b[2]+a[3]*b[3];
+  const target = dot < 0 ? b.map(v => -v) as Quaternion : b;
+  dot = Math.abs(dot);
+  if (dot > .9995) return normalizeQuaternion(a.map((v,i) => v+(target[i]-v)*t)) ?? b;
+  const theta = Math.acos(dot), sin = Math.sin(theta);
+  const wa = Math.sin((1-t)*theta)/sin, wb = Math.sin(t*theta)/sin;
+  return a.map((v,i) => v*wa+target[i]*wb) as Quaternion;
+}
+/** Reads the newest orientation every frame (independent of the 10 Hz dashboard snapshot)
+ * and eases toward it so the hand moves smoothly between sensor packets. */
+function useLiveOrientation(values: number[], latest?: () => number[]): number[] {
+  const [shown,setShown] = useState<number[]>(values);
+  const current = useRef<Quaternion | null>(null);
+  const fallback = useRef(values); fallback.current = values;
+  const source = useRef(latest); source.current = latest;
+  useEffect(() => {
+    let frame = 0, last = performance.now();
+    const tick = (now: number) => {
+      const target = normalizeQuaternion(source.current?.() ?? fallback.current);
+      if (target) {
+        // ~35 ms time constant: removes packet stepping without adding visible lag.
+        const t = 1-Math.exp(-(now-last)/35);
+        const next = current.current ? slerp(current.current,target,t) : target;
+        current.current = next;
+        setShown(next);
+      } else if (current.current) { current.current = null; setShown([]); }
+      last = now;
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  return shown;
+}
+export function OrientationVisual({values: snapshot, latest}: {values: number[]; latest?: () => number[]}) {
+  const values = useLiveOrientation(snapshot, latest);
   const [reference,setReference] = useState<number[]>([]);
   const valid = normalizeQuaternion(values) !== null;
   const pose = handOrientation(values,reference);
@@ -73,7 +110,7 @@ export function OrientationVisual({values}: {values: number[]}) {
         </g>)}
       </g>
     </svg>
-    <div className="orientation-controls"><span>{reference.length ? 'Relative to centered pose' : 'Device reference'}</span><button disabled={!valid} onClick={()=>setReference([...values])} title="Hold your right hand flat, fingers forward, then center">Center hand</button></div>
+    <div className="orientation-controls"><span>{reference.length ? 'Relative to centered pose' : 'Device reference'}</span><button disabled={!valid} onClick={()=>setReference([...(latest?.() ?? values)])} title="Hold your right hand flat, fingers forward, then center">Center hand</button></div>
   </>;
 }
 export function MotionVisual({history,values}:{history:Packet[];values:number[]}){

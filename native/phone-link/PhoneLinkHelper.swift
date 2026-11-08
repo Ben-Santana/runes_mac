@@ -265,10 +265,11 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
         let control = CBMutableCharacteristic(type: CBUUID(nsuuid: RelayWire.characteristic(.control, of: service)), properties: [.notify], value: nil, permissions: [])
         let inboundID = CBUUID(nsuuid: RelayWire.characteristic(.inbound, of: service))
         let inbound = CBMutableCharacteristic(type: inboundID, properties: [.writeWithoutResponse], value: nil, permissions: [.writeable])
-        // Reading this needs an encrypted link, which makes iOS bond with this Mac once.
-        let bond = CBMutableCharacteristic(type: CBUUID(nsuuid: RelayWire.characteristic(.bond, of: service)), properties: [.read], value: nil, permissions: [.readEncryptionRequired])
+        // No OS-level bond: the relay authenticates and encrypts every packet itself. macOS can lose a
+        // bond its peripheral role made (for example across a restart) while iOS keeps it, and iOS then
+        // fails every connect with "Failed to encrypt the connection" until the user forgets the Mac.
         let gatt = CBMutableService(type: CBUUID(nsuuid: service), primary: true)
-        gatt.characteristics = [control, inbound, bond]
+        gatt.characteristics = [control, inbound]
         hosted[service] = Hosted(service: gatt, control: control, inboundID: inboundID)
         inboundToService[inboundID] = service
         manager.add(gatt)

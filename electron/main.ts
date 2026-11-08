@@ -372,8 +372,15 @@ function ensureTray() {
   tray.on('click', ()=>tray?.popUpContextMenu());
   refreshTray();
 }
+function keepMainWindowFocused(){
+  const reclaim=()=>{if(!quitting&&isLiveWindow(window)&&window.isVisible()&&!window.isFocused()){app.focus({steal:true});window.focus();}};
+  // Immediately, then after the radial picker's delayed hide.
+  setTimeout(reclaim,0);setTimeout(reclaim,400);
+}
 ipcMain.handle('app:settings', (event, update) => {
   if (quitting || !isLiveWindow(window) || event.sender !== window.webContents) throw new Error('Unknown settings sender');
+  // Destroying/hiding overlay windows can make macOS activate another app; reclaim focus afterwards.
+  if (update && window.isFocused()) keepMainWindowFocused();
   if (update) {
     if (typeof update.openAtLogin === 'boolean') {
       if (!settings().loginAvailable) throw new Error('Install the packaged macOS app to enable launch at login.');
