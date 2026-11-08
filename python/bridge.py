@@ -202,6 +202,16 @@ class Bridge(EventSink):
         self.source = PhoneEventSource(executable, os.environ.get('NEURAL_PHONE_LINK_STATE'))
         self.update_demand()
         self.source_task = asyncio.create_task(self.source.run(self))
+        self.source_task.add_done_callback(self._source_ended)
+
+    def _source_ended(self, task):
+        if task.cancelled():
+            return
+        error = task.exception()
+        if error is not None and not self.source.closing:
+            print(f'Phone link stopped: {type(error).__name__}: {error}; restarting', file=sys.stderr, flush=True)
+            self.release_all('phone link error')
+            asyncio.get_running_loop().call_later(2, self.start_source)
 
     async def stop_source(self):
         if self.source:

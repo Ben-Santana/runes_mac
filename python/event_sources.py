@@ -182,7 +182,11 @@ class PhoneEventSource(EventSource):
                 self.show_pairing(True)
             try:
                 while line := await self.process.stdout.readline():
-                    self._dispatch(sink, line)
+                    try:
+                        self._dispatch(sink, line)
+                    except Exception as exc:
+                        # A bad message must never take the link down.
+                        sink.on_log(f'Phone link message failed: {type(exc).__name__}: {exc}')
             finally:
                 if self.process.returncode is None:
                     try:
@@ -214,7 +218,8 @@ class PhoneEventSource(EventSource):
         elif kind == 'release':
             sink.on_release(message.get('reason') or 'Phone link')
         elif kind == 'pairing':
-            sink.on_pairing(message if message.get('text') else None)
+            text = message.get('text')
+            sink.on_pairing({'text': text, 'image': message.get('image'), 'expires': message.get('expires')} if text else None)
         elif kind == 'bluetooth':
             sink.on_bluetooth(message.get('state'))
         elif kind == 'log':

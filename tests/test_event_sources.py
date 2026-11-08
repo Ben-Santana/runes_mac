@@ -163,6 +163,17 @@ class PhoneSourceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('Phone link restarted', reasons)
 
 
+class PairingMessageTests(unittest.IsolatedAsyncioTestCase):
+    async def test_pairing_code_reaches_the_ui(self):
+        # The helper's message carries its own "kind"; forwarding it must not collide with emit's.
+        path, _ = PhoneSourceTests().helper([{'kind': 'pairing', 'text': 'NEURALMAC1:abc', 'image': 'data:image/png;base64,AA', 'expires': 1.0, 'mac': 'Studio'}])
+        worker = bridge.Bridge()
+        with patch.object(bridge, 'emit') as emitted:
+            await PhoneSourceTests().run_source(worker, path, lambda: worker.pairing is not None)
+        self.assertEqual(worker.pairing['text'], 'NEURALMAC1:abc')
+        emitted.assert_any_call('phone_pairing', text='NEURALMAC1:abc', image='data:image/png;base64,AA', expires=1.0)
+
+
 class GateTests(unittest.IsolatedAsyncioTestCase):
     async def test_mac_never_starts_a_direct_band_connection(self):
         previous = bridge.DIRECT_BAND
