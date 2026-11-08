@@ -1,5 +1,5 @@
 import {useEffect,useState} from 'react';
-import {Smartphone} from 'lucide-react';
+import {Hand,Settings,Smartphone} from 'lucide-react';
 import type {Message} from './types';
 
 export type PhoneLinkState={state:string;phone?:string|null;phones:{id:string;name:string}[]};
@@ -32,18 +32,28 @@ function BluetoothNote({bluetooth}:{bluetooth:string|null}){
 }
 
 function Code({pairing}:{pairing:PhonePairing}){
- return <div className="pairing-code">{pairing.image?<img src={pairing.image} alt="Pairing code for Neural on iPhone" width={240} height={240}/>:<div className="pairing-code-wait" aria-live="polite">Preparing a code…</div>}</div>;
+ return <div className="pairing-code">{pairing.image?<><img src={pairing.image} alt="Pairing code for Neural on iPhone" width={240} height={240}/><span className="pairing-logo" aria-hidden="true"><Hand size={30} strokeWidth={2}/></span></>:<div className="pairing-code-wait" aria-live="polite">Preparing a code…</div>}</div>;
+}
+
+function Steps(){
+ return <ol className="pairing-steps">
+  <li><span>1</span><p>Open <b>Neural</b> on your iPhone.</p></li>
+  <li><span>2</span><p>Tap <b>Settings</b> <Settings size={14} strokeWidth={1.8} aria-label="gear icon"/> at the top right.</p></li>
+  <li><span>3</span><p>Under <b>Mac</b>, tap <b>Pair Mac</b> and point the camera at this code.</p></li>
+ </ol>;
 }
 
 /** First run. Shown until an iPhone is paired; afterwards pairing never appears again. */
 export function PairingScreen({pairing,bluetooth}:{pairing:PhonePairing;bluetooth:string|null}){
  return <div className="pairing-screen" role="dialog" aria-modal="true" aria-labelledby="pairing-title">
   <section className="pairing-card">
-   <Smartphone size={28} strokeWidth={1.3} aria-hidden="true"/>
-   <h2 id="pairing-title">Open Neural on your iPhone and scan this code.</h2>
    <Code pairing={pairing}/>
+   <div className="pairing-heading">
+    <Smartphone size={26} strokeWidth={1.4} aria-hidden="true"/>
+    <h2 id="pairing-title">Open Neural on your iPhone and scan this code.</h2>
+   </div>
+   <Steps/>
    <BluetoothNote bluetooth={bluetooth}/>
-   <p className="pairing-note">Your iPhone sends your band’s gestures to this Mac. Accept the Bluetooth request on iPhone if one appears.</p>
   </section>
  </div>;
 }
@@ -60,7 +70,7 @@ export function PhoneSettings({link,pairing,bluetooth}:{link:PhoneLinkState;pair
    <div className="setting-row"><span>Status</span><span>{phoneStatus(link)}</span></div>
    {link.phones.map(phone=><div className="setting-row" key={phone.id}><span>{phone.name}</span><button className="button" onClick={()=>remove(phone.id,phone.name)}>Remove</button></div>)}
    <BluetoothNote bluetooth={bluetooth}/>
-   {adding&&pairing.text?<div className="settings-pairing"><p>Open Neural on the other iPhone and scan this code.</p><Code pairing={pairing}/><button className="button" onClick={()=>add(false)}>Done</button></div>
+   {adding&&pairing.text?<div className="settings-pairing"><Code pairing={pairing}/><p>On the other iPhone, open Neural, tap <b>Settings</b> at the top right, then <b>Pair another Mac</b> or <b>Pair Mac</b>.</p><button className="button" onClick={()=>add(false)}>Done</button></div>
     :link.phones.length>0&&<div className="settings-actions"><button className="button" onClick={()=>add(true)}>Pair another iPhone</button></div>}
   </section>
  </>;

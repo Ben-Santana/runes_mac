@@ -156,7 +156,8 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
     private static func qrImage(_ text: String) -> String? {
         guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
         filter.setValue(Data(text.utf8), forKey: "inputMessage")
-        filter.setValue("M", forKey: "inputCorrectionLevel")
+        // High correction leaves room for the logo drawn over the center.
+        filter.setValue("H", forKey: "inputCorrectionLevel")
         guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 8, y: 8)),
               let image = CIContext().createCGImage(output, from: output.extent) else { return nil }
         let bitmap = NSBitmapImageRep(cgImage: image)
