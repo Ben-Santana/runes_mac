@@ -13,20 +13,18 @@ Neural requires an **Apple Silicon Mac, macOS 13 or later**, and a compatible Me
 1. Download the `.dmg` from the latest release's **Assets** section.
 2. Open it and drag **Neural** into **Applications**.
 3. Launch Neural from Applications. Current builds are ad-hoc signed and aren't notarized by Apple. If macOS blocks opening the app, go to **System Settings → Privacy & Security → Open Anyway**.
-4. Allow **Bluetooth** access when prompted. To send shortcuts or control the pointer, enable Neural in **System Settings → Privacy & Security → Accessibility**. You can open these settings from Device settings in the app.
+4. Allow **Bluetooth** access when prompted, so Neural can hear from your iPhone. To send shortcuts or control the pointer, enable Neural in **System Settings → Privacy & Security → Accessibility**. You can open these settings from Device settings in the app.
 
 Neural is an early release. Band firmware compatibility and gesture recognition still need broader hardware testing. Start with a few simple assignments and try them in an app where you can see their effect.
 
-## Connect your band
+## Connect your iPhone
 
-1. Put your band into pairing mode, then choose **Connect band → Scan for bands**.
-2. Select your band. If you've used it with Neural before, choose **Connect with saved identity**.
-3. For first-time setup, expand **First time with this band?** and follow Meta sign-in to enroll it. Enrollment changes the band's saved identity and can invalidate another app's access.
-4. Try an index or middle-finger tap to confirm gestures are arriving.
+Neural on Mac receives your band's gestures from **Neural on your iPhone**. The iPhone holds the band; the Mac never connects to it directly.
 
-When automatic connection is enabled, Neural discovers nearby bands and uses the remembered identity binding. Identity, authentication, or exhausted transport failures pause automatic connection, including across relaunches. Connect and Scan again explicitly resume it; neither starts enrollment.
+1. On first launch, the Mac shows a code. Open Neural on your iPhone and scan it. Accept the Bluetooth request on iPhone if one appears.
+2. That's it. Neural opens at login and runs in the menu bar, which shows **Connected to iPhone**, **iPhone not nearby**, or **Open Neural on iPhone once** (after the iPhone restarts or Neural was closed on it).
 
-You can also choose **Explore demo** to look around without a band. Demo mode previews simulated data and doesn't send keyboard or mouse actions.
+The link comes back by itself after Mac sleep, walking away, and app restarts. To add another iPhone or remove one, use **Device settings → iPhone**.
 
 ## Make it yours
 
@@ -42,12 +40,11 @@ Assignments are saved locally. Shortcuts pause while editing, in Device settings
 
 ## Inspect and troubleshoot
 
-Open **Device settings → Open device test** to view live EMG signals, wrist orientation, and the event and gesture inspectors. Snapshots export the bounded display history, rather than an entire recording session.
+Open **Device settings → Open device test** to view the event and gesture inspectors and air gestures. Live EMG signals, model experiments and native handwriting need a direct band connection and are hidden for now. Snapshots export the bounded display history, rather than an entire recording session.
 
-- **No band found:** check pairing mode, Bluetooth permission, and whether another app is connected.
-- **Connected but no gestures:** check band fit, try index or middle taps, then reconnect. Sensor traffic alone doesn't mean gesture recognition is working.
+- **iPhone not nearby:** bring the iPhone within Bluetooth range and check Bluetooth on both. If it is nearby, open Neural on the iPhone once.
+- **Connected but no gestures:** check in Neural on iPhone that the band is connected, then try index or middle taps.
 - **Shortcuts don't run:** check Accessibility permission, that the assignment is enabled, and that you're outside the editor and device test views.
-- **Saved identity missing or rejected:** open Manage connection and compare the public fingerprint. Choose the existing saved identity for the same physical band, especially after a Bluetooth ID changes. Repair OS pairing separately if needed. Re-enrollment is an explicit ownership replacement, never an automatic repair.
 
 [Report a problem](https://github.com/Ben-Santana/neural/issues) with your macOS version, Mac model, app release, and steps to reproduce it. Don't include passwords, tokens, or private sensor captures.
 
@@ -92,20 +89,21 @@ Each release has a unique tag such as `v0.1.0-build.12` and keeps its own downlo
 
 These are automatically published early builds, not Apple-notarized releases. No signing secrets are required for the current ad-hoc builds. Installing a newer version is manual: download its DMG, quit Neural, and replace the app in Applications.
 
-## Connect iPhone with the Mac identity
+## iPhone link internals
 
-In **Device settings → Connection**, select **Show iPhone QR code**. Allow macOS Keychain access if prompted. In the iPhone app, select the same band and choose **Import Mac identity**. The QR supports verified identities and explicitly permitted missing-band-key compatibility identities; it never enrolls or changes ownership. Compatibility preserves channel encryption and host authentication while leaving band identity unverified.
+The link is a native helper (`native/phone-link`, built to `dist-electron/neural-phone-link` by `npm run build`) started by the Python bridge, which feeds its events into the same shortcut engine the band transport used. The protocol and pairing code are shared with the iPhone app; `scripts/sync-relay-wire.sh` copies them from `../NeuralIOS` and `npm run test:phone-link` fails if they drift. Design, packet format, safety rules and the hardware checklist: `NeuralIOS/Documentation/MacLink.md`.
 
-The QR contains the private authentication key. Keep it out of photos and screen sharing. It is generated locally in memory and hidden after 60 seconds, when the window loses focus after the QR loads, or when the settings view closes. A copied code remains usable. Disconnect the Mac before connecting the iPhone; sharing an identity does not enable simultaneous connections.
+The direct band connection (`meta_neural_py`, enrollment, identity handoff) remains in `python/bridge.py` for development only. It is off unless `NEURAL_DIRECT_BAND=1`, and the UI no longer exposes it.
 
-The native QR helper is compiled by `npm run build` and `npm run desktop` and included in packaged apps. Installed users do not need Swift or Xcode.
+Checks: `npm run test:python`, `npm run test:phone-link`, and with a preview running (`npx vite preview --port 5190`), `npm run test:connection`. The UI checks mock the bridge; hardware behavior needs the checklist.
 
-## Shared identity and manual handoff
+## Signing and Accessibility
 
-Connect never opens Meta sign-in. Explicit setup requires confirming ownership replacement. Closing or canceling sign-in pauses connection attempts; no automatic enrollment fallback exists. Transient transport failures receive at most three retries (1, 2, 4 seconds), then pause for user recovery. Identity, trust, and permission failures pause immediately.
+Ad-hoc signed builds get a new code identity on every update, so macOS forgets the Accessibility permission (and may ask again for Keychain access to the iPhone pairing). The fix is Developer ID signing plus notarization:
 
-If the band appears with a different Bluetooth UUID, select it and choose its existing **Ownership identity** in Manage connection. Compare the public host fingerprint with iPhone. The new address is bound only after authentication; original Keychain accounts and other identities remain intact. Saved is the default; eligible pending enrollment is an explicit option. Compatibility cannot prove that a rediscovered peripheral is the same band, so this association requires your physical selection.
+1. Enroll in the Apple Developer Program and create a **Developer ID Application** certificate.
+2. Sign with the hardened runtime: `codesign --force --options runtime --timestamp --entitlements <entitlements.plist> --sign "Developer ID Application: …"`, signing nested binaries (`neural-phone-link`, the Python runtime's `.so`/`.dylib` files) before the app. The bundled Python needs `com.apple.security.cs.allow-unsigned-executable-memory` and `com.apple.security.cs.disable-library-validation`.
+3. Notarize and staple: `xcrun notarytool submit Neural.dmg --keychain-profile neural --wait`, then `xcrun stapler staple`.
+4. In CI, import the certificate from an encrypted secret into a temporary keychain and store the notary API key as a secret.
 
-For switching, choose Disconnect and wait for **Local connection closed**. Automatic connection stays paused across relaunches. Then connect iPhone with the same identity. This confirms local cleanup, not remote availability or band bond capacity. Do not repeatedly enroll or enter pairing mode to hand off.
-
-Run the isolated regression checks with `npm run test:python` and, with the local preview running, `node scripts/connection-stability-smoke.mjs` and `node scripts/startup-smoke.mjs`. The UI checks mock the bridge. They do not establish hardware switching reliability.
+With a stable Team ID, Accessibility and Keychain grants survive updates, and Gatekeeper no longer needs **Open Anyway**.

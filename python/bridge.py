@@ -38,6 +38,26 @@ else:
 
 
 try:
+    from .event_sources import Demand, EventSink, PhoneEventSource, demand_for
+except ImportError:
+    try:
+        from event_sources import Demand, EventSink, PhoneEventSource, demand_for
+    except ImportError:
+        from python.event_sources import Demand, EventSink, PhoneEventSource, demand_for
+try:
+    from .mouse import holding as mouse_holding
+except ImportError:
+    try:
+        from mouse import holding as mouse_holding
+    except ImportError:
+        from python.mouse import holding as mouse_holding
+
+
+# The Mac never connects to the band unless a developer opts in. Its gesture source is Neural on iPhone.
+DIRECT_BAND = __import__('os').environ.get('NEURAL_DIRECT_BAND') == '1'
+DIRECT_BAND_ACTIONS = ('discover', 'identities', 'connect', 'enroll', 'disconnect')
+
+try:
     from .connection_identity import ConnectionIdentityStore, identity_catalog
 except ImportError:
     try:
@@ -87,7 +107,7 @@ def discovery_timeout(value):
     return int(timeout) if timeout.is_integer() else timeout
 
 
-class Bridge:
+class Bridge(EventSink):
     def __init__(self):
         self.models = ModelLab(emit)
         self.native = NativeHandwriting(emit, self.models.root)
@@ -98,7 +118,101 @@ class Bridge:
         self.keyboard = MacKeyboard()
         self.shortcut_error = None
         self.api_slots = threading.BoundedSemaphore(4)
+        self.source = None
+        self.source_task = None
+        self.link = {'state': 'starting', 'phone': None, 'phones': []}
+        self.pairing = None
+        self.bluetooth = None
+        self.assignments = []
+        self.viewing_motion = False
+        self.last_flush = 0.0
+        self.flush_handle = None
         self.shortcuts = ShortcutEngine(self.deliver_shortcut, on_recognized=lambda motion: emit('motion', motion=motion), on_progress=lambda candidates: emit('combo_progress', candidates=candidates), on_input=lambda event: emit('gesture_input', input=event), on_outcome=lambda outcome: emit('combo_outcome', **outcome), on_action=lambda: emit('action_fired'), on_adjust=lambda: emit('adjust_tick'), on_air_preview=lambda state: emit('air_preview', **state), on_air_result=lambda state: emit('air_result', **state))
+
+    # Event sink. Every source feeds this path, so shortcuts, combos, profiles and hold-and-turn don't care where events come from.
+
+    def handle_event(self, data):
+        self.models.ingest(data)
+        self.shortcuts.ingest(data)
+        self.pending.append(data)
+        self.update_holding()
+
+    def is_holding(self):
+        engine = self.shortcuts
+        return bool(engine.held_fingers) or engine.adjustment is not None or engine.mouse is not None or mouse_holding()
+
+    def update_holding(self):
+        if self.source:
+            self.source.set_holding(self.is_holding())
+
+    def release_all(self, reason=''):
+        """Nothing may stay held once the link drops or goes stale."""
+        self.release_mouse_hold()
+        self.shortcuts.reset()
+        self.update_holding()
+
+    def on_event(self, packet):
+        if self.link.get('state') != 'connected':
+            return
+        self.handle_event(packet)
+        now = time.monotonic()
+        if now - self.last_flush >= 1/30:
+            self.flush_events()
+        elif self.flush_handle is None:
+            self.flush_handle = asyncio.get_running_loop().call_later(1/30, self.flush_events)
+
+    def flush_events(self):
+        self.flush_handle = None
+        self.last_flush = time.monotonic()
+        if self.pending:
+            emit('events', events=self.pending)
+            self.pending = []
+
+    def on_link(self, link):
+        previous = self.link.get('state')
+        self.link = link
+        if link.get('state') != 'connected':
+            self.release_all('link ' + str(link.get('state')))
+            if previous == 'connected':
+                self.models.invalidate('Recording discarded: iPhone disconnected')
+        emit('phone_link', **link)
+        emit('state', state='connected' if link.get('state') == 'connected' else 'disconnected')
+
+    def on_release(self, reason):
+        self.release_all(reason)
+
+    def on_pairing(self, pairing):
+        self.pairing = pairing
+        emit('phone_pairing', **(pairing or {'text': None}))
+
+    def on_bluetooth(self, state):
+        self.bluetooth = state
+        emit('phone_bluetooth', state=state)
+
+    def on_log(self, message):
+        print(message, file=sys.stderr, flush=True)
+
+    def update_demand(self):
+        if self.source:
+            self.source.set_demand(demand_for(self.assignments, self.viewing_motion))
+
+    def start_source(self):
+        import os
+        executable = os.environ.get('NEURAL_PHONE_LINK') or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'dist-electron', 'neural-phone-link')
+        self.source = PhoneEventSource(executable, os.environ.get('NEURAL_PHONE_LINK_STATE'))
+        self.update_demand()
+        self.source_task = asyncio.create_task(self.source.run(self))
+
+    async def stop_source(self):
+        if self.source:
+            await self.source.close()
+        if self.source_task:
+            self.source_task.cancel()
+            try:
+                await self.source_task
+            except (asyncio.CancelledError, Exception):
+                pass
+        self.release_all('shutdown')
 
     def release_mouse_hold(self):
         try:
@@ -352,10 +466,7 @@ class Bridge:
                     last_flush = time.monotonic()
                     last_battery = last_flush
                     async for event in events:
-                        data = packet(event)
-                        self.models.ingest(data)
-                        self.shortcuts.ingest(data)
-                        self.pending.append(data)
+                        self.handle_event(packet(event))
                         now = time.monotonic()
                         if now-last_flush >= 1/30:
                             emit('events', events=self.pending, stats=normalize(band.stats))
@@ -380,7 +491,27 @@ class Bridge:
 
     async def command(self, command):
         action = command.get('action')
-        if isinstance(action, str) and action.startswith('native_handwriting_'):
+        if action in DIRECT_BAND_ACTIONS and not DIRECT_BAND:
+            # The Mac must never connect to the band directly; gestures come from iPhone.
+            return True
+        if action == 'phone_status':
+            emit('phone_link', **self.link)
+            emit('phone_pairing', **(self.pairing or {'text': None}))
+            if self.bluetooth:
+                emit('phone_bluetooth', state=self.bluetooth)
+            if self.source:
+                self.source.request_status()
+        elif action == 'phone_pair':
+            if self.source:
+                self.source.show_pairing(command.get('show') is not False)
+        elif action == 'phone_forget':
+            if self.source:
+                phone_id = command.get('id')
+                self.source.forget(phone_id if isinstance(phone_id, str) else None)
+        elif action == 'motion_view':
+            self.viewing_motion = command.get('enabled') is True
+            self.update_demand()
+        elif isinstance(action, str) and action.startswith('native_handwriting_'):
             try:
                 if action == 'native_handwriting_start':
                     if self.models.capture or self.models.active:
@@ -418,7 +549,10 @@ class Bridge:
             self.shortcuts.publish_air_preview()
         elif action == 'configure_shortcuts':
             self.release_mouse_hold()
+            self.assignments = command.get('assignments', []) if isinstance(command.get('assignments'), list) else []
             self.shortcuts.configure(command.get('assignments', []))
+            self.update_holding()
+            self.update_demand()
         elif action == 'radial_execute':
             output = command.get('output')
             if isinstance(output, dict) and output.get('type') == 'shortcut':
@@ -481,6 +615,7 @@ class Bridge:
                 emit('handoff_unconfirmed', message='Local cleanup reported an error. Automatic connection is paused. Check diagnostics and retry Disconnect before using iPhone; do not re-enroll.')
         elif action == 'shutdown':
             await self.models.cancel()
+            await self.stop_source()
             await self.disconnect()
             return False
         return True
@@ -489,6 +624,8 @@ class Bridge:
 async def main():
     bridge = Bridge()
     emit('ready')
+    if not DIRECT_BAND:
+        bridge.start_source()
     try:
         while line := await asyncio.to_thread(sys.stdin.readline):
             try:
@@ -498,6 +635,7 @@ async def main():
                 emit('error', message=f'{type(exc).__name__}: {exc}')
     finally:
         await bridge.models.cancel()
+        await bridge.stop_source()
         await bridge.disconnect()
 
 

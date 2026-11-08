@@ -8,6 +8,8 @@ from unittest.mock import ANY, AsyncMock, patch
 spec = importlib.util.spec_from_file_location('bridge', pathlib.Path(__file__).parents[1]/'python/bridge.py')
 bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)
+# These tests cover the direct band path, which the app keeps for development only (NEURAL_DIRECT_BAND=1).
+bridge.DIRECT_BAND = True
 
 
 class SerializationTests(unittest.TestCase):

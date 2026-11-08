@@ -38,6 +38,7 @@ jobs:
         run: |
           npm run test:python
           npm run test:air:math
+          npm run test:phone-link
       - name: Build DMG
         run: npm run package:mac
       - name: Verify packaged app and checksum
@@ -46,6 +47,7 @@ jobs:
           PYTHONHOME="$PWD/release/dmg/Neural.app/Contents/Resources/runtime" \
             release/dmg/Neural.app/Contents/Resources/runtime/bin/python3.12 \
             -c 'import meta_neural_py; import ssl; print("Bundled Python ready")'
+          test -x release/dmg/Neural.app/Contents/Resources/app/dist-electron/neural-phone-link || find release/dmg/Neural.app -name neural-phone-link | grep -q .
           hdiutil verify release/Neural-*-arm64.dmg
           cd release
           shasum -a 256 Neural-*-arm64.dmg > SHA256SUMS.txt

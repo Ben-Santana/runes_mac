@@ -26,6 +26,9 @@ build is ad-hoc signed and is not notarized; if blocked, allow it in System Sett
 
 ## Connect
 
+> The app receives gestures from Neural on iPhone (README → Connect your iPhone; design in `NeuralIOS/Documentation/MacLink.md`). The direct band steps below apply only to development runs with `NEURAL_DIRECT_BAND=1`.
+
+
 1. Put the band into pairing mode and choose **Connect band → Scan for bands**.
 2. Select the intended device. Use **Connect with saved identity** if already enrolled.
 3. For a new identity, expand **First time with this band?** and explicitly enroll.
@@ -96,6 +99,9 @@ Verification: `npm run build`, `npm run test:python`, `npm run test:ui`, and `no
 While automatic connection is enabled, Neural scans for nearby bands. A single discovered band connects automatically using its saved identity; multiple bands open the connection picker. No bands leaves the app disconnected. Explicit manual connection, disconnect, or demo actions cancel pending startup auto-connection.
 
 ### Connection recovery and shared ownership
+
+> The app receives gestures from Neural on iPhone (README → Connect your iPhone; design in `NeuralIOS/Documentation/MacLink.md`). The direct band steps below apply only to development runs with `NEURAL_DIRECT_BAND=1`.
+
 
 Connect never invokes enrollment. Missing credentials, rejected identity, trust timeout, permission failures, and protocol failures pause for explicit recovery. Transport failures retry at 1, 2, and 4 seconds, then pause. Canceling Meta sign-in also pauses the UI's automatic discovery/connect loop, persistently across launches.
 

@@ -23,11 +23,11 @@ shutil.copy2(root/'build/icon.icns',resources/'Neural.icns')
 info_path=contents/'Info.plist'
 info=plistlib.loads(info_path.read_bytes())
 (contents/'MacOS/Electron').rename(contents/'MacOS/Neural')
-info.update(CFBundleExecutable='Neural',CFBundleName='Neural',CFBundleDisplayName='Neural',CFBundleIdentifier='com.neural.bandstudio',CFBundleVersion=package['version'],CFBundleShortVersionString=package['version'],CFBundleIconFile='Neural.icns',NSBluetoothAlwaysUsageDescription='Neural connects to your Meta Neural Band to read gestures and motion.',NSBluetoothPeripheralUsageDescription='Neural connects to your Meta Neural Band.')
+info.update(CFBundleExecutable='Neural',CFBundleName='Neural',CFBundleDisplayName='Neural',CFBundleIdentifier='com.neural.bandstudio',CFBundleVersion=package['version'],CFBundleShortVersionString=package['version'],CFBundleIconFile='Neural.icns',NSBluetoothAlwaysUsageDescription='Neural receives your band’s gestures from Neural on your iPhone over Bluetooth.',NSBluetoothPeripheralUsageDescription='Neural receives gestures from Neural on your iPhone.')
 info_path.write_bytes(plistlib.dumps(info))
 subprocess.run(['codesign','--force','--deep','--sign','-',str(app)],check=True)
 (stage/'Applications').symlink_to('/Applications')
-(stage/'Install.txt').write_text('Drag Neural to Applications. Open Neural from Applications.\nThis local build is ad-hoc signed, not notarized. If macOS blocks it, use System Settings > Privacy & Security > Open Anyway.\nAllow Bluetooth for band access and Accessibility for motion shortcuts when requested.\nRequires an Apple Silicon Mac and macOS 13 or later. Python is included.\n')
+(stage/'Install.txt').write_text('Drag Neural to Applications. Open Neural from Applications.\nThis local build is ad-hoc signed, not notarized. If macOS blocks it, use System Settings > Privacy & Security > Open Anyway.\nAllow Bluetooth so Neural can receive gestures from your iPhone, and Accessibility for shortcuts, when requested.\nRequires an Apple Silicon Mac and macOS 13 or later. Python is included.\n')
 dmg=release/f"Neural-{package['version']}-arm64.dmg"
 subprocess.run(['hdiutil','create','-volname','Neural','-srcfolder',str(stage),'-ov','-format','UDZO',str(dmg)],check=True)
 print(dmg)

@@ -319,7 +319,7 @@ function pickerMessage(message:any){
  if(message.kind==='state'&&message.state==='disconnected')closePicker();
 }
 let quitting = false;
-let runInBackground = false;
+let runInBackground = true;
 let compactRadialMenus = false;
 let keepRadialMenuOpen=false;
 let radialMenuFollowsMouse=false;
@@ -337,8 +337,24 @@ function hideWindow() {
   window.hide();
   app.dock?.hide();
 }
+// The Mac's only gesture source is Neural on iPhone. Its status lives in the menu bar.
+let phoneLink:{state:string;phone?:string|null}={state:'starting'};
+const phoneStatusText=()=>({connected:'Connected to iPhone',away:'iPhone not nearby',open_app:'Open Neural on iPhone once',unpaired:'Pair your iPhone',searching:'Connecting to iPhone…',sleeping:'iPhone not nearby',unavailable:'iPhone link unavailable'} as Record<string,string>)[phoneLink.state]??'Starting…';
+function refreshTray(){
+  if(!tray)return;
+  tray.setToolTip(`Neural — ${phoneStatusText()}`);
+  tray.setContextMenu(Menu.buildFromTemplate([{label:phoneStatusText(),enabled:false},{type:'separator'},{label:'Open Neural',click:showWindow},{type:'separator'},{label:'Quit Neural',click:()=>app.quit()}]));
+}
+function phoneLinkMessage(message:any){
+  if(message?.kind!=='phone_link'||typeof message.state!=='string')return;
+  const changed=message.state!==phoneLink.state;
+  phoneLink={state:message.state,phone:message.phone};
+  if(changed)refreshTray();
+  // First run: bring the pairing code forward.
+  if(message.state==='unpaired'&&isLiveWindow(window)&&!window.isVisible())showWindow();
+}
 function ensureTray() {
-  if (tray) return;
+  if (tray) { refreshTray(); return; }
   const pixels = Buffer.alloc(18 * 18 * 4);
   const points = [[2,10],[5,10],[7,3],[11,15],[13,8],[16,8]];
   for (let segment = 1; segment < points.length; segment++) {
@@ -353,9 +369,8 @@ function ensureTray() {
   const icon = nativeImage.createFromBitmap(pixels, {width:18,height:18,scaleFactor:1});
   icon.setTemplateImage(true);
   tray = new Tray(icon);
-  tray.setToolTip('Neural');
-  tray.setContextMenu(Menu.buildFromTemplate([{label:'Open Neural',click:showWindow},{type:'separator'},{label:'Quit Neural',click:()=>app.quit()}]));
-  tray.on('click', showWindow);
+  tray.on('click', ()=>tray?.popUpContextMenu());
+  refreshTray();
 }
 ipcMain.handle('app:settings', (event, update) => {
   if (quitting || !isLiveWindow(window) || event.sender !== window.webContents) throw new Error('Unknown settings sender');
@@ -403,33 +418,6 @@ function credentialsCommand(request:object):Promise<any> {
     child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(request)+'\n');
   });
 }
-// Keep identity images out of the bridge event stream, logs, and persistent storage.
-ipcMain.handle('band:identity-qr', async (event, deviceId) => {
-  if (quitting || !isLiveWindow(window) || event.sender !== window.webContents) throw new Error('Unknown settings sender');
-  if (process.platform !== 'darwin' || typeof deviceId !== 'string' || !/^[A-Za-z0-9:-]{1,128}$/.test(deviceId)) throw new Error('Invalid band identifier');
-  const encoded = await new Promise<string>((resolve, reject) => {
-    execFile(path.join(root, 'dist-electron/identity-qr'), [deviceId], {timeout:30000,maxBuffer:1024*1024,env:{...process.env,NEURAL_IDENTITY_MAP:path.join(app.getPath('userData'),'band-identities.json')}}, (error, stdout, stderr) => {
-      if (error || !stdout || !/^[A-Za-z0-9+/=]+$/.test(stdout)) {
-        // Classify only known helper failures; never forward arbitrary helper output or key material.
-        const status = stderr.match(/Keychain status (-?\d+)/)?.[1];
-        let message = 'Could not export the band identity. Try again.';
-        if (status === '-128' || status === '-25293' || status === '-25308')
-          message = 'Keychain access was canceled or denied. Click Retry and allow access using your Mac login password.';
-        else if (status === '-25300')
-          message = 'No saved identity was found for this band. Connect to the band on this Mac first, then retry.';
-        else if (status)
-          message = `Could not read the saved identity (Keychain status ${status}). Unlock the login keychain in Keychain Access, then retry.`;
-        else if (stderr.includes('A verified Mac identity with a band public key is required.'))
-          message = 'The saved identity is incomplete or unverified. Connect to the band on this Mac to verify it, disconnect, then retry.';
-        else if (error?.killed)
-          message = 'Keychain access timed out. Click Retry and respond to the macOS permission prompt.';
-        reject(new Error(message));
-      }
-      else resolve(stdout);
-    });
-  });
-  return `data:image/png;base64,${encoded}`;
-});
 ipcMain.handle('meta:credentials',async(event,request)=>{
   if(quitting || !isLiveWindow(window) || event.sender!==window.webContents)throw new Error('Unknown settings sender');
   if(!['status','save','forget'].includes(request?.action))throw new Error('Invalid credential action');
@@ -458,12 +446,14 @@ function startWorker() {
   const localPython = path.join(root, '.venv/bin/python');
   const bundledPython = path.join(process.resourcesPath, 'runtime/bin/python3.12');
   const executable = app.isPackaged ? bundledPython : (process.env.BAND_PYTHON || (fs.existsSync(localPython) ? localPython : 'python3'));
-  worker = spawn(executable, ['-u', path.join(root, 'python/bridge.py')], { cwd: app.isPackaged ? app.getPath('userData') : root, env: {...process.env, PYTHONHOME: app.isPackaged ? path.join(process.resourcesPath, 'runtime') : process.env.PYTHONHOME, PYTHONNOUSERSITE:'1', PYTHONDONTWRITEBYTECODE:'1', NEURAL_MODEL_HOME:path.join(app.getPath('userData'),'model-lab'), NEURAL_IDENTITY_MAP:path.join(app.getPath('userData'),'band-identities.json')} });
+  worker = spawn(executable, ['-u', path.join(root, 'python/bridge.py')], { cwd: app.isPackaged ? app.getPath('userData') : root, env: {...process.env, PYTHONHOME: app.isPackaged ? path.join(process.resourcesPath, 'runtime') : process.env.PYTHONHOME, PYTHONNOUSERSITE:'1', PYTHONDONTWRITEBYTECODE:'1', NEURAL_MODEL_HOME:path.join(app.getPath('userData'),'model-lab'), NEURAL_IDENTITY_MAP:path.join(app.getPath('userData'),'band-identities.json'),NEURAL_PHONE_LINK:path.join(root,'dist-electron/neural-phone-link'),NEURAL_PHONE_LINK_STATE:path.join(app.getPath('userData'),'phone-link.json')} });
   workerCommand({action:'air_preview',enabled:airCursorOverlay});
-  createInterface({input:worker.stdout}).on('line', line => { try { const message=JSON.parse(line);if(message.kind==='meta_login')void handleMetaLogin(message);else if(message.kind==='meta_login_cancel'){if(loginRequest===message.request_id){loginRequest=undefined;activeLogin?.cancel();}}else publish(message); } catch { publish({kind:'error',message:'Invalid bridge response'}); } });
+  createInterface({input:worker.stdout}).on('line', line => { try { const message=JSON.parse(line);if(message.kind==='meta_login')void handleMetaLogin(message);else if(message.kind==='meta_login_cancel'){if(loginRequest===message.request_id){loginRequest=undefined;activeLogin?.cancel();}}else{phoneLinkMessage(message);publish(message);} } catch { publish({kind:'error',message:'Invalid bridge response'}); } });
   worker.stderr.on('data', data => publish({kind:'log',message:data.toString().slice(0,2000)}));
   worker.on('error', error => publish({kind:'error',message:error.message}));
-  worker.on('exit', code => {loginRequest=undefined;activeLogin?.cancel();worker=undefined; publish({kind:'state',state:'disconnected'}); if(code) publish({kind:'error',message:`Python bridge exited (${code}). Check the Python environment.`});});
+  worker.on('exit', code => {loginRequest=undefined;activeLogin?.cancel();worker=undefined; publish({kind:'state',state:'disconnected'}); if(code) publish({kind:'error',message:`Python bridge exited (${code}). Check the Python environment.`});
+    // The bridge holds the iPhone link; bring it back without user action.
+    if(!quitting)setTimeout(()=>{if(!quitting)startWorker();},2000);});
 }
 ipcMain.on('band:command', (event, command) => {
   if(quitting || !command)return;
@@ -516,17 +506,21 @@ ipcMain.on('band:command', (event, command) => {
     if(process.platform === 'darwin') { systemPreferences.isTrustedAccessibilityClient(true); shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'); }
     return;
   }
-  if(!['configure_shortcuts','suspend_shortcuts','discover','identities','connect','disconnect','enroll','shutdown','native_handwriting_status','native_handwriting_start','native_handwriting_stop','native_handwriting_clear','model_status','model_leave','model_install','model_cancel','model_capture_start','model_capture_stop','model_run'].includes(command.action)) return;
+  // Direct band commands are not forwarded: the Mac receives gestures only from iPhone.
+  if(!['configure_shortcuts','suspend_shortcuts','phone_status','phone_pair','phone_forget','motion_view','shutdown','native_handwriting_status','native_handwriting_start','native_handwriting_stop','native_handwriting_clear','model_status','model_leave','model_install','model_cancel','model_capture_start','model_capture_stop','model_run'].includes(command.action)) return;
   startWorker(); worker?.stdin.write(JSON.stringify(command)+'\n');
 });
 if (!app.requestSingleInstanceLock()) app.quit();
 else app.on('second-instance', () => { if (window) showWindow(); });
 app.whenReady().then(() => {
-  try { const saved=JSON.parse(fs.readFileSync(preferencesPath(), 'utf8')); runInBackground=saved.runInBackground===true; compactRadialMenus=saved.compactRadialMenus===true;keepRadialMenuOpen=saved.keepRadialMenuOpen===true;radialMenuFollowsMouse=saved.radialMenuFollowsMouse===true;floatingComboViewer=saved.floatingComboViewer===true;airCursorOverlay=saved.airCursorOverlay===true;notchMenuNames=saved.notchMenuNames!==false;notchComboViewerSides=validNotchSides(saved.notchComboViewerSides)?saved.notchComboViewerSides:'both'; } catch { /* First launch uses defaults. */ }
+  try { const saved=JSON.parse(fs.readFileSync(preferencesPath(), 'utf8')); runInBackground=saved.runInBackground!==false; compactRadialMenus=saved.compactRadialMenus===true;keepRadialMenuOpen=saved.keepRadialMenuOpen===true;radialMenuFollowsMouse=saved.radialMenuFollowsMouse===true;floatingComboViewer=saved.floatingComboViewer===true;airCursorOverlay=saved.airCursorOverlay===true;notchMenuNames=saved.notchMenuNames!==false;notchComboViewerSides=validNotchSides(saved.notchComboViewerSides)?saved.notchComboViewerSides:'both'; } catch { /* First launch uses defaults. */ }
+  // Defaults: open at login once (the user can turn it off), run in the background, menu bar status always.
+  const firstRunPath=path.join(app.getPath('userData'),'login-default-applied');
+  if(process.platform==='darwin'&&app.isPackaged&&!fs.existsSync(firstRunPath)){try{app.setLoginItemSettings({openAtLogin:true});fs.mkdirSync(app.getPath('userData'),{recursive:true});fs.writeFileSync(firstRunPath,'1');}catch{/* Login Items may need approval in System Settings. */}}
   const backgroundLaunch = process.platform === 'darwin' && app.getLoginItemSettings().wasOpenedAtLogin;
-  if (runInBackground || backgroundLaunch) ensureTray();
+  ensureTray();
   window = new BrowserWindow({show:!backgroundLaunch,width:1450,height:950,minWidth:860,minHeight:680,title:'Neural — Motions',backgroundColor:'#ffffff',titleBarStyle:'hiddenInset',webPreferences:{preload:path.join(root,'dist-electron/preload.cjs'),backgroundThrottling:false,contextIsolation:true,nodeIntegration:false,sandbox:true}});
-  syncComboViewer();syncAirCursor();
+  syncComboViewer();syncAirCursor();startWorker();
   screen.on('display-added',refreshNotchGeometry);
   screen.on('display-removed',refreshNotchGeometry);
   screen.on('display-metrics-changed',refreshNotchGeometry);

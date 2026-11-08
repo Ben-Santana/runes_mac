@@ -71,6 +71,10 @@ def toggle_hold():
         _held = not _held
 
 
+def holding():
+    return _held
+
+
 def release_hold():
     global _held
     with _lock:
