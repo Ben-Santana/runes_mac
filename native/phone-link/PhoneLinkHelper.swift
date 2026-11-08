@@ -41,7 +41,7 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
         self.memoryURL = memoryURL
         memory = memoryURL.flatMap { try? JSONDecoder().decode([UUID: PhoneLinkCore.PhoneMemory].self, from: Data(contentsOf: $0)) } ?? [:]
         var records: [RelayKeyStore.Record] = []
-        do { records = try RelayKeyStore.all() } catch { Self.write(["kind": "log", "message": "Keychain: \(error.localizedDescription)"]) }
+        do { records = try RelayKeyStore.all() } catch { Self.trace("Keychain: \(error.localizedDescription)") }
         core = PhoneLinkCore(records: records, memory: memory, now: Self.now)
         super.init()
     }
@@ -131,6 +131,7 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
 
     private func newOffer() {
         let invitation = core.startPairing(macName: macName)
+        Self.trace("new pairing code; pairing service \(invitation.service.uuidString.prefix(8))")
         removeService(pairingService)
         pairingService = invitation.service
         host(invitation.service)
@@ -180,16 +181,19 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
                 do {
                     try RelayKeyStore.save(record)
                 } catch {
-                    Self.write(["kind": "log", "message": "Could not save the pairing: \(error.localizedDescription)"])
+                    Self.trace("Could not save the pairing: \(error.localizedDescription)")
                     continue
                 }
+                Self.trace("pairing request verified from \(record.name); publishing its service")
                 memory[record.id] = PhoneLinkCore.PhoneMemory()
                 saveMemory()
-                apply(core.commit(record, now: Self.now))
+                // Keep the pairing service until the accept is out: register the accept before anything
+                // (such as the state change below) can decide pairing is over.
                 pendingAccepts[record.pairing.service] = (accept, peer, pairService)
+                showPairingRequested = false
+                apply(core.commit(record, now: Self.now))
                 // Publish the link service first; the accept goes out once it exists.
                 host(record.pairing.service)
-                showPairingRequested = false
             case .removed(let id):
                 let services = Set(core.linkServices)
                 for (service, _) in hosted where service != pairingService && !services.contains(service) { removeService(service) }
@@ -203,7 +207,7 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
                 memory[id] = value
                 saveMemory()
             case .log(let message):
-                Self.write(["kind": "log", "message": message])
+                Self.trace(message)
             }
         }
     }
@@ -274,7 +278,7 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
     private func send(_ packet: Data, to peer: UUID, service: UUID) {
         guard let central = centrals[peer], let entry = hosted[service] else { return }
         guard packet.count <= central.maximumUpdateValueLength else {
-            Self.write(["kind": "log", "message": "Bluetooth link too small for a \(packet.count)-byte message"])
+            Self.trace("Bluetooth link too small for a \(packet.count)-byte message")
             return
         }
         if !outbox.isEmpty || !manager.updateValue(packet, for: entry.control, onSubscribedCentrals: [central]) {
@@ -300,6 +304,7 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
         }
         if state != lastBluetooth {
             lastBluetooth = state
+            Self.trace("bluetooth \(state)")
             Self.write(["kind": "bluetooth", "state": state])
         }
         guard peripheral.state == .poweredOn else {
@@ -320,12 +325,14 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
 
     func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
         if let error {
-            Self.write(["kind": "log", "message": "Could not publish a Bluetooth service: \(error.localizedDescription)"])
+            Self.trace("Could not publish a Bluetooth service: \(error.localizedDescription)")
             return
         }
         guard let id = UUID(uuidString: service.uuid.uuidString) else { return }
+        Self.trace("published \(label(id))")
         advertise(restart: true)
         if let pending = pendingAccepts.removeValue(forKey: id), let entry = hosted[pending.pairService], let central = centrals[pending.peer] {
+            Self.trace("sending pairing accept")
             if !peripheral.updateValue(pending.accept, for: entry.control, onSubscribedCentrals: [central]) {
                 outbox.append((entry.control, central, pending.accept))
             }
@@ -343,16 +350,21 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
     }
 
     func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?) {
-        if let error { Self.write(["kind": "log", "message": "Bluetooth advertising failed: \(error.localizedDescription)"]) }
+        if let error { Self.trace("Bluetooth advertising failed: \(error.localizedDescription)") }
+        else { Self.trace("advertising \(hosted.count) service(s)") }
     }
 
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
         centrals[central.identifier] = central
         peripheral.setDesiredConnectionLatency(.low, for: central)
+        if let service = hosted.first(where: { $0.value.control.uuid == characteristic.uuid })?.key {
+            Self.trace("central \(central.identifier.uuidString.prefix(8)) subscribed to \(label(service)) (max \(central.maximumUpdateValueLength) bytes)")
+        }
     }
 
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
         guard let service = hosted.first(where: { $0.value.control.uuid == characteristic.uuid })?.key else { return }
+        Self.trace("central \(central.identifier.uuidString.prefix(8)) unsubscribed from \(label(service))")
         apply(core.unsubscribed(central.identifier, service: service, now: Self.now))
     }
 
@@ -363,17 +375,43 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
         }
         request.value = Data([1])
         peripheral.respond(to: request, withResult: .success)
+        Self.trace("bond read by \(request.central.identifier.uuidString.prefix(8)) (link encrypted)")
     }
 
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
         for request in requests {
             guard let service = inboundToService[request.characteristic.uuid], let packet = request.value else { continue }
             centrals[request.central.identifier] = request.central
+            if packet.count >= 2, packet[packet.startIndex + 1] < 0x10 {
+                Self.trace("received \(["", "pair request", "pair accept", "pair reject", "hello", "mac hello", "reset"][min(Int(packet[packet.startIndex + 1]), 6)]) on \(label(service))")
+            }
             apply(core.receive(packet, from: request.central.identifier, service: service, now: Self.now))
         }
     }
 
     // MARK: Output
+
+    /// Connection diagnostics, never keys or codes: ~/Library/Logs/Neural/phone-link.log
+    private static let logHandle: FileHandle? = {
+        let folder = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Neural", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appendingPathComponent("phone-link.log")
+        if let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int, size > 2_000_000 { try? FileManager.default.removeItem(at: url) }
+        if !FileManager.default.fileExists(atPath: url.path) { FileManager.default.createFile(atPath: url.path, contents: nil) }
+        let handle = try? FileHandle(forWritingTo: url)
+        _ = try? handle?.seekToEnd()
+        return handle
+    }()
+
+    static func trace(_ message: String) {
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        logHandle?.write(Data("\(stamp) \(message)\n".utf8))
+        write(["kind": "log", "message": message])
+    }
+
+    private func label(_ service: UUID) -> String {
+        service == pairingService ? "pairing service" : "link service \(service.uuidString.prefix(8))"
+    }
 
     private static let output = FileHandle.standardOutput
     static func write(_ object: [String: Any]) {
