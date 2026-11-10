@@ -1,7 +1,7 @@
 import {normalizeCheatSheetDescriptions} from './shortcuts';
 import {hasCopiedAssignment,pasteAssignment} from './assignmentClipboard';
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {Activity,Radio,Layers3,SlidersHorizontal,ArrowUpRight,ChevronRight,ChevronDown,Download,Pause,Play,ScanLine,Battery,MoveUpRight,Rotate3D,Hand,ArrowLeft,X,RefreshCw,Check,Unplug,FileJson, Circle,Info,Plus,Home,Briefcase,Code2,Music,Gamepad2,Camera,PenTool,Globe,Star,Heart,Monitor,Headphones,Trash2,Pencil,Shapes} from 'lucide-react';
+import {Activity,Radio,Layers3,SlidersHorizontal,ArrowUpRight,ChevronRight,ChevronDown,Download,Pause,Play,ScanLine,Battery,MoveUpRight,Rotate3D,Hand,ArrowLeft,X,RefreshCw,Check,Unplug,FileJson, Circle,Info,Plus,Home,Trash2,Pencil,Shapes} from 'lucide-react';
 import type {Device,Message,Packet} from './types';
 import {simulate} from './simulation';
 import {MotionVisual,OrientationVisual} from './SensorVisuals';
@@ -10,6 +10,7 @@ import {gestureMeaning} from './gestureLabels';
 import {PairingScreen,PhoneSettings,phoneStatus,usePhoneLink} from './PhoneLink';
 import {confirmPhoneOverlap,macBindings,newlySet,usePhoneBindings} from './linkedBindings';
 import {AppSettings} from './AppSettings';
+import {profileIcons} from './MenuIcons';
 import {ModelTests} from './ModelTests';
 import {AirGestureTest} from './AirGestureTest';
 import {ComboTracker} from './ComboTracker';
@@ -17,7 +18,6 @@ import {MotionSettings} from './MotionSettings';
 import {canReceiveOutput,loadAssignments,motions,normalizeAssignments,type Assignment} from './shortcuts';
 import {noteComboOutcome, noteComboProgress, playAdjustTick, playConnectBell, playDisconnectBell} from './connectBell';
 
-const profileIcons={home:Home,work:Briefcase,code:Code2,music:Music,game:Gamepad2,camera:Camera,design:PenTool,globe:Globe,star:Star,heart:Heart,monitor:Monitor,headphones:Headphones};
 type ProfileIcon=keyof typeof profileIcons;
 type MotionProfile={id:string;name:string;icon?:ProfileIcon;assignments:Assignment[];cheatSheetDescriptions?:Record<string,string>};
 function loadProfiles():{profiles:MotionProfile[];activeId:string;sharedIds?:string[];sharedPicker?:Assignment}{
