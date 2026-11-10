@@ -91,7 +91,7 @@ These are automatically published early builds, not Apple-notarized releases. No
 
 ## iPhone link internals
 
-The link is a native helper (`native/phone-link`, built to `dist-electron/runes-phone-link` by `npm run build`) started by the Python bridge, which feeds its events into the same shortcut engine the band transport used. The protocol and pairing code are shared with the iPhone app; `scripts/sync-relay-wire.sh` copies them from `../RunesIOS` and `npm run test:phone-link` fails if they drift. Design, packet format, safety rules and the hardware checklist: `RunesIOS/Documentation/MacLink.md`.
+The link is a native helper (`native/phone-link`, built to `dist-electron/runes-phone-link` by `npm run build`) started by the Python bridge, which feeds its events into the same shortcut engine the band transport used. The protocol and pairing code are shared with the iPhone app; `scripts/sync-relay-wire.sh` copies them from `../runes_ios` and `npm run test:phone-link` fails if they drift. Design, packet format, safety rules and the hardware checklist: `RunesIOS/Documentation/MacLink.md`.
 
 The direct band connection (`meta_neural_py`, enrollment, identity handoff) remains in `python/bridge.py` for development only. It is off unless `RUNES_DIRECT_BAND=1`, and the UI no longer exposes it.
 

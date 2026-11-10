@@ -26,7 +26,7 @@ build is ad-hoc signed and is not notarized; if blocked, allow it in System Sett
 
 ## Connect
 
-> The app receives gestures from Runes on iPhone (README → Connect your iPhone; design in `RunesIOS/Documentation/MacLink.md`). The direct band steps below apply only to development runs with `RUNES_DIRECT_BAND=1`.
+> The app receives gestures from Runes on iPhone (README → Connect your iPhone; design in `runes_ios/Documentation/MacLink.md`). The direct band steps below apply only to development runs with `RUNES_DIRECT_BAND=1`.
 
 
 1. Put the band into pairing mode and choose **Connect band → Scan for bands**.
@@ -100,7 +100,7 @@ While automatic connection is enabled, Runes scans for nearby bands. A single di
 
 ### Connection recovery and shared ownership
 
-> The app receives gestures from Runes on iPhone (README → Connect your iPhone; design in `RunesIOS/Documentation/MacLink.md`). The direct band steps below apply only to development runs with `RUNES_DIRECT_BAND=1`.
+> The app receives gestures from Runes on iPhone (README → Connect your iPhone; design in `runes_ios/Documentation/MacLink.md`). The direct band steps below apply only to development runs with `RUNES_DIRECT_BAND=1`.
 
 
 Connect never invokes enrollment. Missing credentials, rejected identity, trust timeout, permission failures, and protocol failures pause for explicit recovery. Transport failures retry at 1, 2, and 4 seconds, then pause. Canceling Meta sign-in also pauses the UI's automatic discovery/connect loop, persistently across launches.

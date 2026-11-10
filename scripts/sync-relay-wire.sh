@@ -3,7 +3,7 @@
 # `--check` only reports drift (used by the native tests when the sibling checkout exists).
 set -eu
 here=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-ios=${RUNES_IOS_ROOT:-$here/../RunesIOS}
+ios=${RUNES_IOS_ROOT:-$here/../runes_ios}
 dest=$here/native/phone-link/Shared
 for name in RelayWire.swift RelayKeyStore.swift; do
   source=$ios/RunesIOS/Relay/$name

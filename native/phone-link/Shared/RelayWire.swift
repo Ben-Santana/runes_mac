@@ -10,8 +10,8 @@ import CryptoKit
 ///     plaintext kinds (pairing and handshake) follow with their own fields;
 ///     sealed kinds follow with: session tag (4) · counter (u32 BE) · ChaCha20-Poly1305 ciphertext + tag (16)
 ///
-/// All integers are big-endian. Canonical copy: RunesIOS/RunesIOS/Relay/RelayWire.swift.
-/// The Mac app vendors this file byte for byte (mac_os_meta_band_app/scripts/sync-relay-wire.sh).
+/// All integers are big-endian. Canonical copy: runes_ios/RunesIOS/Relay/RelayWire.swift.
+/// The Mac app vendors this file byte for byte (runes_mac/scripts/sync-relay-wire.sh).
 enum RelayWire {
     static let version: UInt8 = 1
     /// Larger than any packet this version sends. Apple-to-Apple links negotiate an ATT MTU of 185 or more.

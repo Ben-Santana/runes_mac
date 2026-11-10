@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 /// Long-term relay pairings, one Keychain item each. The phone keeps one per Mac; the Mac keeps one per phone.
-/// Canonical copy: RunesIOS/RunesIOS/Relay/RelayKeyStore.swift (vendored by the Mac app).
+/// Canonical copy: runes_ios/RunesIOS/Relay/RelayKeyStore.swift (vendored by the Mac app).
 enum RelayKeyStore {
     struct Record: Codable, Equatable, Sendable {
         let id: UUID
