@@ -168,6 +168,31 @@ struct PhoneLinkCoreTests {
         precondition(mine.state(now: 30).0 == .away)
         outputs = mine.forget(nil, now: 31)
         precondition(outputs.contains(.removed(record.id)) && states(outputs) == [.unpaired])
-        print("Phone link checks passed: pairing, one-time code, demand/ready, stale and motion filtering, replay, relaunch, hold watchdog, lease, sleep, removal.")
+
+        // The cable: a hello from the cable's peer takes the session over from Bluetooth.
+        let wired = PhoneLinkCore(records: [record], now: 0)
+        let cablePeer = UUID()
+        var plugged = FakePhone(pairing: record.pairing)
+        for packet in sent(wired.receive(plugged.hello(), from: peer, service: record.pairing.service, now: 1)) { _ = try plugged.receive(packet) }
+        outputs = wired.receive(plugged.hello(), from: cablePeer, service: record.pairing.service, now: 2)
+        precondition(releases(outputs) == 1)
+        precondition(outputs.allSatisfy { if case .send(let to, _, _) = $0 { return to == cablePeer } else { return true } })
+        for packet in sent(outputs) { _ = try plugged.receive(packet) }
+        // Bluetooth dropping, or turning off, leaves the cable's session alone. Unplugging ends it.
+        precondition(wired.unsubscribed(peer, service: record.pairing.service, now: 3).isEmpty)
+        precondition(wired.endAll("Bluetooth is off", keeping: [cablePeer], now: 4).isEmpty && wired.state(now: 4).0 == .connected)
+        precondition(sent(wired.setDemand(.motion, now: 5)).count == 1)
+        precondition(releases(wired.unsubscribed(cablePeer, service: record.pairing.service, now: 6)) == 1 && wired.state(now: 6).0 != .connected)
+
+        // Cable framing survives being split anywhere and rejects lengths no peer sends.
+        let framed = RelayWire.usbFrame(service: record.pairing.service, Data([1, 2, 3])) + RelayWire.usbFrame(service: record.pairing.service, Data())
+        var buffer = Data()
+        var frames: [(service: UUID, packet: Data)] = []
+        for byte in framed { buffer.append(byte); frames += try RelayWire.usbFrames(&buffer) }
+        precondition(buffer.isEmpty && frames.count == 2 && frames[0].packet == Data([1, 2, 3]) && frames[1].packet.isEmpty)
+        precondition(frames.allSatisfy { $0.service == record.pairing.service })
+        var junk = Data([0xff, 0xff, 0])
+        precondition((try? RelayWire.usbFrames(&junk)) == nil)
+        print("Phone link checks passed: pairing, one-time code, demand/ready, stale and motion filtering, replay, relaunch, hold watchdog, lease, sleep, removal, cable.")
     }
 }

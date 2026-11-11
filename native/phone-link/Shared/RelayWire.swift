@@ -29,6 +29,38 @@ enum RelayWire {
     static let gestureMaxAge: TimeInterval = 1
     static let motionMaxAge: TimeInterval = 0.2
 
+    // MARK: Cable
+
+    /// With the iPhone plugged in, the Mac reaches this TCP port on it through usbmuxd and the link's
+    /// packets travel over the cable instead of Bluetooth. The packets are the same ones, so the cable
+    /// is trusted no more than the air. Each is framed as: length (u16 BE) · link service (16) · packet.
+    static let usbPort: UInt16 = 28417
+    static let usbMaxFrame = 1024
+
+    static func usbFrame(service: UUID, _ packet: Data) -> Data {
+        var w = Writer()
+        w.u16(UInt16(16 + packet.count))
+        w.bytes(withUnsafeBytes(of: service.uuid) { Data($0) })
+        w.bytes(packet)
+        return w.data
+    }
+
+    /// Takes every complete frame off the front of `buffer`. Throws on a length no peer sends; close the connection then.
+    static func usbFrames(_ buffer: inout Data) throws -> [(service: UUID, packet: Data)] {
+        var frames: [(UUID, Data)] = []
+        while buffer.count >= 2 {
+            let length = Int(buffer[buffer.startIndex]) << 8 | Int(buffer[buffer.startIndex + 1])
+            guard length >= 16, length <= usbMaxFrame else { throw Failure.invalidPacket }
+            guard buffer.count >= 2 + length else { break }
+            let body = Data(buffer.dropFirst(2).prefix(length))
+            buffer = Data(buffer.dropFirst(2 + length))
+            let b = [UInt8](body.prefix(16))
+            let service = UUID(uuid: (b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]))
+            frames.append((service, Data(body.dropFirst(16))))
+        }
+        return frames
+    }
+
     enum Failure: LocalizedError, Equatable {
         case invalidInvitation, expiredInvitation, invalidPacket, unsupportedVersion, authentication, replay, tokenUsed
         var errorDescription: String? {

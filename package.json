@@ -22,7 +22,7 @@
     "test:air:feature": "node scripts/air-feature-smoke.mjs",
     "test:air:math": "node scripts/air-gesture-math.mjs",
     "test:air:engine": "npm run build && node scripts/air-engine-smoke.mjs",
-    "build:phone-link": "mkdir -p dist-electron && swiftc -O native/phone-link/Shared/*.swift native/phone-link/PhoneLinkCore.swift native/phone-link/PhoneLinkHelper.swift -o dist-electron/runes-phone-link",
+    "build:phone-link": "mkdir -p dist-electron && swiftc -O native/phone-link/Shared/*.swift native/phone-link/PhoneLinkCore.swift native/phone-link/CableLink.swift native/phone-link/PhoneLinkHelper.swift -o dist-electron/runes-phone-link",
     "test:phone-link": "sh scripts/sync-relay-wire.sh --check && mkdir -p dist-electron && swiftc native/phone-link/Shared/*.swift native/phone-link/PhoneLinkCore.swift native/phone-link/Tests/PhoneLinkCoreTests.swift -o dist-electron/phone-link-tests && dist-electron/phone-link-tests"
   },
   "dependencies": {

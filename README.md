@@ -95,6 +95,8 @@ The link is a native helper (`native/phone-link`, built to `dist-electron/runes-
 
 The direct band connection (`meta_neural_py`, enrollment, identity handoff) remains in `python/bridge.py` for development only. It is off unless `RUNES_DIRECT_BAND=1`, and the UI no longer exposes it.
 
+**Cable.** With the iPhone plugged in, the link runs over the cable instead of Bluetooth (`native/phone-link/CableLink.swift`, and "Cable" in the iPhone's `PhoneRelay.swift`). The helper dials TCP port 28417 on the phone through usbmuxd, the phone says hello on that connection, and the same authenticated packets travel in length-prefixed frames. The phone closes its Bluetooth connection to that Mac meanwhile and reopens it when the cable goes away. Pairing still happens over Bluetooth. The band still reaches the phone over Bluetooth. Not yet tried on hardware.
+
 Checks: `npm run test:python`, `npm run test:phone-link`, and with a preview running (`npx vite preview --port 5190`), `npm run test:connection`. The UI checks mock the bridge; hardware behavior needs the checklist.
 
 ## Signing and Accessibility

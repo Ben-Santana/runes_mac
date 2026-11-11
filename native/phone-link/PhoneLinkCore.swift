@@ -1,7 +1,8 @@
 import Foundation
 
 /// The Mac's side of the iPhone link, without Bluetooth: pairing, sessions, leases, the hold watchdog,
-/// and which events are fresh enough to act on. `PhoneLinkHelper` moves its packets over GATT.
+/// and which events are fresh enough to act on. `PhoneLinkHelper` moves its packets over GATT,
+/// or over the cable while the phone is plugged in (`CableLink`).
 final class PhoneLinkCore {
     typealias Demand = RelayWire.Demand
     typealias Peer = UUID
@@ -182,10 +183,11 @@ final class PhoneLinkCore {
         return out + [.release("iPhone removed")] + stateChange(now)
     }
 
-    /// Bluetooth turned off or reset: every session is gone.
-    func endAll(_ reason: String, now: TimeInterval) -> [Output] {
-        let had = phones.values.contains { $0.session != nil }
-        for id in phones.keys {
+    /// Bluetooth turned off or reset: every session it carried is gone. Sessions with `keeping` peers (the cable) stay.
+    func endAll(_ reason: String, keeping: Set<Peer> = [], now: TimeInterval) -> [Output] {
+        let ending = phones.filter { !($0.value.peer.map(keeping.contains) ?? false) }
+        let had = ending.values.contains { $0.session != nil }
+        for id in ending.keys {
             phones[id]?.session = nil
             phones[id]?.peer = nil
             phones[id]?.applied = false

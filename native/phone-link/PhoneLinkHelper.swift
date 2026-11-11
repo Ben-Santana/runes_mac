@@ -4,6 +4,7 @@ import CoreImage
 
 /// The Mac app's only gesture source: Runes on a paired iPhone. The Mac is the BLE peripheral and
 /// publishes one GATT service per paired phone (plus a pairing service while the code is showing).
+/// A paired phone that is plugged in is reached over the cable instead (`CableLink`), with the same packets.
 ///
 /// Protocol with the Python bridge, one JSON object per line.
 /// stdout: {"kind":"link","state":…,"phone":…,"phones":[{id,name}]} · {"kind":"pairing","text":…,"image":…,"expires":…}
@@ -35,6 +36,7 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
     private var lastBluetooth = ""
     private let macName = Host.current().localizedName ?? "Mac"
     private var activity: NSObjectProtocol?
+    private let cable = CableLink()
 
     private static var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
 
@@ -65,6 +67,17 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
             self.apply(self.core.wake(now: Self.now))
             self.advertise(restart: true)
         }
+        cable.onPacket = { [weak self] peer, service, packet in
+            // Pairing stays on Bluetooth, where the code on screen proves who is asking.
+            guard let self, service != self.pairingService else { return }
+            self.apply(self.core.receive(packet, from: peer, service: service, now: Self.now))
+        }
+        cable.onClosed = { [weak self] peer in
+            guard let self else { return }
+            for service in self.core.linkServices { self.apply(self.core.unsubscribed(peer, service: service, now: Self.now)) }
+        }
+        cable.onLog = { Self.trace($0) }
+        cable.start()
         publishState()
         readCommands()
     }
@@ -290,6 +303,7 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
     }
 
     private func send(_ packet: Data, to peer: UUID, service: UUID) {
+        if cable.send(packet, to: peer, service: service) { return }
         guard let central = centrals[peer], let entry = hosted[service] else { return }
         guard packet.count <= central.maximumUpdateValueLength else {
             Self.trace("Bluetooth link too small for a \(packet.count)-byte message")
@@ -326,7 +340,7 @@ final class PhoneLinkHelper: NSObject, CBPeripheralManagerDelegate {
             inboundToService.removeAll()
             centrals.removeAll()
             outbox.removeAll()
-            apply(core.endAll("Bluetooth is off", now: Self.now))
+            apply(core.endAll("Bluetooth is off", keeping: cable.peers, now: Self.now))
             return
         }
         peripheral.removeAllServices()
