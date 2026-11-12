@@ -153,7 +153,15 @@ final class PhoneLinkCore {
         sleeping = false
         // The phone needs a moment to notice; treat it like a fresh start.
         startedAt = now
-        return stateChange(now)
+        // Bluetooth often comes back before the wake notification (and during dark wakes), so a phone
+        // may already have said hello and been given the idle demand. Without this its session stays
+        // "connected" but every gesture is dropped until something else re-sends the demand.
+        var out: [Output] = []
+        for id in phones.keys where phones[id]?.session != nil {
+            phones[id]?.applied = false
+            out += seal(id, .demand(effectiveDemand), now: now)
+        }
+        return out + stateChange(now)
     }
 
     func startPairing(macName: String, now: Date = Date()) -> RelayWire.Invitation {

@@ -163,6 +163,21 @@ struct PhoneLinkCoreTests {
         precondition(sent(other.receive(stranger.hello(), from: peer, service: record.pairing.service, now: 1)).isEmpty)
         precondition(other.state(now: 1).0 == .searching && other.state(now: 21).0 == .openApp)
 
+        // The phone reconnects before the Mac's wake notification: it gets the idle demand, and waking
+        // must hand it the real one, or the link shows connected while every gesture is dropped.
+        let napper = PhoneLinkCore(records: [record], now: 0)
+        var early = FakePhone(pairing: record.pairing)
+        _ = napper.sleep(now: 1)
+        var greeted: [RelayWire.Message?] = []
+        for packet in sent(napper.receive(early.hello(), from: peer, service: record.pairing.service, now: 2)) { greeted.append(try early.receive(packet)) }
+        precondition(greeted.contains(.demand(.idle)) && napper.state(now: 2).0 == .connected)
+        _ = napper.receive(try early.seal(.ready(nil)), from: peer, service: record.pairing.service, now: 3)
+        let woke = napper.wake(now: 4)
+        try check(try sent(woke).map { try early.receive($0) }.contains(.demand(napper.demand)), "Waking re-sends the demand")
+        _ = napper.receive(try early.seal(.ready(napper.demand)), from: peer, service: record.pairing.service, now: 5)
+        let afterWake = napper.receive(try early.seal(.event(gesture(1, derived: 1))), from: peer, service: record.pairing.service, now: 6)
+        precondition(events(afterWake).count == 1, "Gestures flow after waking")
+
         // The Mac can remove a phone too.
         let mine = PhoneLinkCore(records: [record], memory: [record.id: .init(everConnected: true)], now: 0)
         precondition(mine.state(now: 30).0 == .away)
